@@ -3,9 +3,9 @@ import type { AppData, BillItem, ItemBill } from "./types";
 import { billTotal, loadData, saveData } from "./storage";
 import { createId } from "./ids";
 import { formatCurrency, formatDateTime } from "./utils";
-import { loadCloudConfig, isCloudConnected } from "./cloudConfig";
-import { autoLoadCloud, autoSaveCloud } from "./cloudSync";
-import { CloudBackup } from "./CloudBackup";
+import { loadGithubConfig, isGithubConnected } from "./githubConfig";
+import { autoLoadGithub, autoSaveGithub } from "./githubStorage";
+import { GithubBackup } from "./GithubBackup";
 
 type Screen = "home" | "edit";
 type Tab = "items" | "labour";
@@ -19,12 +19,12 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("items");
-  const [cloudReady, setCloudReady] = useState(false);
+  const [githubReady, setGithubReady] = useState(false);
   const [syncStatus, setSyncStatus] = useState<
     "local" | "loading" | "saving" | "saved" | "error"
   >("local");
-  const cloudConfig = useRef(loadCloudConfig());
-  const skipCloudSave = useRef(true);
+  const githubConfig = useRef(loadGithubConfig());
+  const skipGithubSave = useRef(true);
 
   const [shopName, setShopName] = useState("");
   const [itemName, setItemName] = useState("");
@@ -35,45 +35,45 @@ export default function App() {
   const [labourAmount, setLabourAmount] = useState("");
 
   useEffect(() => {
-    const config = cloudConfig.current;
-    if (!isCloudConnected(config)) {
-      setCloudReady(true);
+    const config = githubConfig.current;
+    if (!isGithubConnected(config)) {
+      setGithubReady(true);
       setSyncStatus("local");
       return;
     }
     setSyncStatus("loading");
-    autoLoadCloud(config)
+    autoLoadGithub(config)
       .then((loaded) => {
         if (loaded) setData(loaded);
         setSyncStatus("saved");
-        setCloudReady(true);
+        setGithubReady(true);
       })
       .catch(() => {
         setSyncStatus("error");
-        setCloudReady(true);
+        setGithubReady(true);
       });
   }, []);
 
   useEffect(() => {
     saveData(data);
-    if (!cloudReady || skipCloudSave.current) {
-      skipCloudSave.current = false;
+    if (!githubReady || skipGithubSave.current) {
+      skipGithubSave.current = false;
       return;
     }
-    const config = cloudConfig.current;
-    if (!isCloudConnected(config)) {
+    const config = githubConfig.current;
+    if (!isGithubConnected(config)) {
       setSyncStatus("local");
       return;
     }
 
     setSyncStatus("saving");
     const timer = window.setTimeout(() => {
-      autoSaveCloud(config, data)
+      autoSaveGithub(config, data)
         .then(() => setSyncStatus("saved"))
         .catch(() => setSyncStatus("error"));
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [data, cloudReady]);
+  }, [data, githubReady]);
 
   const itemsTotal = useMemo(
     () => data.itemBills.reduce((s, b) => s + billTotal(b), 0),
@@ -205,15 +205,15 @@ export default function App() {
             <h1>Shop Expense Tracker</h1>
             <p>Add items &amp; labour below · toggle saved billing with tabs</p>
           </div>
-          <CloudBackup
+          <GithubBackup
             data={data}
             syncStatus={syncStatus}
             onConfigChange={(next) => {
-              cloudConfig.current = next;
-              if (!isCloudConnected(next)) setSyncStatus("local");
+              githubConfig.current = next;
+              if (!isGithubConnected(next)) setSyncStatus("local");
             }}
             onDataLoaded={(loaded) => {
-              skipCloudSave.current = true;
+              skipGithubSave.current = true;
               setData(loaded);
               setSyncStatus("saved");
             }}
@@ -481,8 +481,8 @@ export default function App() {
       </div>
 
       <p className="footer-note">
-        Data saves on this device. Tap the cloud button above to auto-save to
-        GitHub or Google Drive.
+        Data saves on this device. Tap the button above to auto-save a text
+        file to GitHub (<code>data/expenses.txt</code>).
       </p>
     </div>
   );

@@ -1,8 +1,10 @@
 import type { AppData } from "./types";
 import type { GithubConfig } from "./githubConfig";
 import { defaultData, saveData } from "./storage";
+import { dataToText, ensureIds, jsonToData, textToData } from "./textBackup";
 
-const DATA_PATH = "data/expenses.json";
+const TEXT_PATH = "data/expenses.txt";
+const LEGACY_JSON_PATH = "data/expenses.json";
 
 interface GithubFileResponse {
   content: string;
@@ -32,8 +34,8 @@ function encodeContent(text: string): string {
   return btoa(unescape(encodeURIComponent(text)));
 }
 
-function apiUrl(config: GithubConfig): string {
-  return `https://api.github.com/repos/${config.owner.trim()}/${config.repo.trim()}/contents/${DATA_PATH}`;
+function apiUrl(config: GithubConfig, path: string): string {
+  return `https://api.github.com/repos/${config.owner.trim()}/${config.repo.trim()}/contents/${path}`;
 }
 
 function githubErrorMessage(status: number, body: string): string {
@@ -60,44 +62,64 @@ function githubErrorMessage(status: number, body: string): string {
   return body || `GitHub request failed (${status})`;
 }
 
-export async function loadFromGithub(config: GithubConfig): Promise<AppData> {
-  const res = await fetch(apiUrl(config), {
+async function fetchFile(
+  config: GithubConfig,
+  path: string
+): Promise<GithubFileResponse | null> {
+  const res = await fetch(apiUrl(config, path), {
     headers: authHeaders(config.token.trim()),
   });
 
-  if (res.status === 404) {
-    cachedSha = undefined;
-    return { ...defaultData };
-  }
+  if (res.status === 404) return null;
 
   if (!res.ok) {
     const err = await res.text();
     throw new Error(githubErrorMessage(res.status, err));
   }
 
-  const file = (await res.json()) as GithubFileResponse;
-  cachedSha = file.sha;
-  const parsed = JSON.parse(decodeContent(file.content)) as AppData;
-  return {
-    itemBills: parsed.itemBills ?? [],
-    labour: parsed.labour ?? [],
-  };
+  return (await res.json()) as GithubFileResponse;
+}
+
+function parseFileContent(file: GithubFileResponse, path: string): AppData {
+  const decoded = decodeContent(file.content);
+  if (path.endsWith(".json")) {
+    return ensureIds(jsonToData(decoded));
+  }
+  return ensureIds(textToData(decoded));
+}
+
+export async function loadFromGithub(config: GithubConfig): Promise<AppData> {
+  const textFile = await fetchFile(config, TEXT_PATH);
+  if (textFile) {
+    cachedSha = textFile.sha;
+    return parseFileContent(textFile, TEXT_PATH);
+  }
+
+  const jsonFile = await fetchFile(config, LEGACY_JSON_PATH);
+  if (jsonFile) {
+    cachedSha = undefined;
+    return parseFileContent(jsonFile, LEGACY_JSON_PATH);
+  }
+
+  cachedSha = undefined;
+  return { ...defaultData };
 }
 
 export async function saveToGithub(
   config: GithubConfig,
   data: AppData
 ): Promise<void> {
+  const text = dataToText(data);
   const body: Record<string, string> = {
-    message: `Update expenses ${new Date().toISOString()}`,
-    content: encodeContent(JSON.stringify(data, null, 2)),
+    message: `Update expenses backup ${new Date().toISOString()}`,
+    content: encodeContent(text),
   };
 
   if (cachedSha) {
     body.sha = cachedSha;
   }
 
-  const res = await fetch(apiUrl(config), {
+  const res = await fetch(apiUrl(config, TEXT_PATH), {
     method: "PUT",
     headers: {
       ...authHeaders(config.token.trim()),
@@ -115,9 +137,7 @@ export async function saveToGithub(
   cachedSha = result.content?.sha ?? cachedSha;
 }
 
-export async function syncFromGithub(
-  config: GithubConfig
-): Promise<AppData> {
+export async function syncFromGithub(config: GithubConfig): Promise<AppData> {
   const data = await loadFromGithub(config);
   saveData(data);
   return data;
@@ -133,4 +153,24 @@ export async function syncToGithub(
 
 export function clearGithubCache(): void {
   cachedSha = undefined;
+}
+
+export async function autoLoadGithub(
+  config: GithubConfig
+): Promise<AppData | null> {
+  if (!config.connected) return null;
+  clearGithubCache();
+  try {
+    return await syncFromGithub(config);
+  } catch {
+    return null;
+  }
+}
+
+export async function autoSaveGithub(
+  config: GithubConfig,
+  data: AppData
+): Promise<void> {
+  if (!config.connected) return;
+  await syncToGithub(config, data);
 }
