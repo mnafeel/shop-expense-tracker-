@@ -3,8 +3,9 @@ import type { AppData, BillItem, ItemBill } from "./types";
 import { billTotal, loadData, saveData } from "./storage";
 import { createId } from "./ids";
 import { formatCurrency, formatDateTime } from "./utils";
-import { loadGithubConfig, isGithubConfigured } from "./githubConfig";
-import { GithubSyncPanel, autoLoadGithub, autoSaveGithub } from "./GithubSync";
+import { loadCloudConfig, isCloudConnected } from "./cloudConfig";
+import { autoLoadCloud, autoSaveCloud } from "./cloudSync";
+import { CloudBackup } from "./CloudBackup";
 
 type Screen = "home" | "edit";
 type Tab = "items" | "labour";
@@ -18,9 +19,12 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("items");
-  const [githubReady, setGithubReady] = useState(false);
-  const githubConfig = useRef(loadGithubConfig());
-  const skipGithubSave = useRef(true);
+  const [cloudReady, setCloudReady] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<
+    "local" | "loading" | "saving" | "saved" | "error"
+  >("local");
+  const cloudConfig = useRef(loadCloudConfig());
+  const skipCloudSave = useRef(true);
 
   const [shopName, setShopName] = useState("");
   const [itemName, setItemName] = useState("");
@@ -31,33 +35,45 @@ export default function App() {
   const [labourAmount, setLabourAmount] = useState("");
 
   useEffect(() => {
-    const config = githubConfig.current;
-    if (!isGithubConfigured(config)) {
-      setGithubReady(true);
+    const config = cloudConfig.current;
+    if (!isCloudConnected(config)) {
+      setCloudReady(true);
+      setSyncStatus("local");
       return;
     }
-    autoLoadGithub(config)
+    setSyncStatus("loading");
+    autoLoadCloud(config)
       .then((loaded) => {
         if (loaded) setData(loaded);
-        setGithubReady(true);
+        setSyncStatus("saved");
+        setCloudReady(true);
       })
-      .catch(() => setGithubReady(true));
+      .catch(() => {
+        setSyncStatus("error");
+        setCloudReady(true);
+      });
   }, []);
 
   useEffect(() => {
     saveData(data);
-    if (!githubReady || skipGithubSave.current) {
-      skipGithubSave.current = false;
+    if (!cloudReady || skipCloudSave.current) {
+      skipCloudSave.current = false;
       return;
     }
-    const config = githubConfig.current;
-    if (!isGithubConfigured(config)) return;
+    const config = cloudConfig.current;
+    if (!isCloudConnected(config)) {
+      setSyncStatus("local");
+      return;
+    }
 
+    setSyncStatus("saving");
     const timer = window.setTimeout(() => {
-      autoSaveGithub(config, data).catch(() => {});
-    }, 1500);
+      autoSaveCloud(config, data)
+        .then(() => setSyncStatus("saved"))
+        .catch(() => setSyncStatus("error"));
+    }, 800);
     return () => window.clearTimeout(timer);
-  }, [data, githubReady]);
+  }, [data, cloudReady]);
 
   const itemsTotal = useMemo(
     () => data.itemBills.reduce((s, b) => s + billTotal(b), 0),
@@ -184,8 +200,25 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1>Shop Expense Tracker</h1>
-        <p>Add items &amp; labour below · toggle saved billing with tabs</p>
+        <div className="header-row">
+          <div>
+            <h1>Shop Expense Tracker</h1>
+            <p>Add items &amp; labour below · toggle saved billing with tabs</p>
+          </div>
+          <CloudBackup
+            data={data}
+            syncStatus={syncStatus}
+            onConfigChange={(next) => {
+              cloudConfig.current = next;
+              if (!isCloudConnected(next)) setSyncStatus("local");
+            }}
+            onDataLoaded={(loaded) => {
+              skipCloudSave.current = true;
+              setData(loaded);
+              setSyncStatus("saved");
+            }}
+          />
+        </div>
       </header>
 
       <section className="summary-bar" aria-label="Totals">
@@ -447,19 +480,9 @@ export default function App() {
         </section>
       </div>
 
-      <GithubSyncPanel
-        data={data}
-        onConfigChange={(next) => {
-          githubConfig.current = next;
-        }}
-        onDataLoaded={(loaded) => {
-          skipGithubSave.current = true;
-          setData(loaded);
-        }}
-      />
-
       <p className="footer-note">
-        Data saves on this device. Enable GitHub sync above to store in your repo.
+        Data saves on this device. Tap the cloud button above to auto-save to
+        GitHub or Google Drive.
       </p>
     </div>
   );

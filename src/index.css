@@ -118,6 +118,101 @@ textarea {
   margin-top: 0.25rem;
 }
 
+.header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cloud-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.4rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  white-space: nowrap;
+}
+
+.cloud-status-btn.connected {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.cloud-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fbbf24;
+}
+
+.cloud-status-btn.connected .cloud-dot {
+  background: #6ee7b7;
+}
+
+.cloud-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.cloud-modal {
+  width: min(100%, 420px);
+  max-height: 90dvh;
+  overflow-y: auto;
+}
+
+.cloud-modal .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cloud-provider-tabs {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.cloud-provider-tabs .tab {
+  flex: 1;
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1.5px solid var(--border);
+}
+
+.cloud-provider-tabs .tab.active {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.cloud-connected-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.cloud-modal code {
+  font-size: 0.8em;
+  background: var(--surface-2);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
 @media (min-width: 768px) {
   .header {
     padding: 1.5rem 2rem;
@@ -979,40 +1074,6 @@ label {
 .saved-bill .bill-header-actions {
   padding: 0.75rem 1rem;
   border-top: 1px solid var(--border);
-}
-
-.github-sync-card {
-  margin-top: 1.25rem;
-}
-
-.github-sync-card code {
-  font-size: 0.8em;
-  background: var(--surface-2);
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
-}
-
-.checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.checkbox-row input {
-  width: auto;
-}
-
-.github-sync-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.github-sync-actions .btn {
-  flex: 1;
-  min-width: 140px;
 }
 
 .sync-msg {
