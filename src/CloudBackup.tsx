@@ -26,7 +26,9 @@ declare global {
               access_token?: string;
               expires_in?: number;
               error?: string;
+              error_description?: string;
             }) => void;
+            error_callback?: (err: { type: string; message?: string }) => void;
           }) => { requestAccessToken: (opts?: { prompt?: string }) => void };
         };
       };
@@ -60,9 +62,23 @@ function requestGoogleToken(
     const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: "https://www.googleapis.com/auth/drive.file",
+      error_callback: (err) => {
+        reject(
+          new Error(
+            err.message ||
+              `${err.type}. Check Google Cloud setup (origins, test user).`
+          )
+        );
+      },
       callback: (response) => {
         if (response.error || !response.access_token) {
-          reject(new Error(response.error || "Google sign-in cancelled"));
+          reject(
+            new Error(
+              response.error_description ||
+                response.error ||
+                "Google sign-in cancelled"
+            )
+          );
           return;
         }
         resolve({
@@ -71,7 +87,7 @@ function requestGoogleToken(
         });
       },
     });
-    client.requestAccessToken({ prompt: "consent" });
+    client.requestAccessToken({ prompt: "" });
   });
 }
 
@@ -310,6 +326,54 @@ export function CloudBackup({
                     Sign in once; updates happen automatically when you add
                     data.
                   </p>
+                  <details className="google-setup-details">
+                    <summary>If you see “Access blocked”</summary>
+                    <ol className="hint google-setup-list">
+                      <li>
+                        <a
+                          href="https://console.cloud.google.com/apis/credentials"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Credentials
+                        </a>
+                        : open your OAuth client → <strong>Authorized
+                        JavaScript origins</strong> must include exactly{" "}
+                        <code>https://mnafeel.github.io</code>
+                      </li>
+                      <li>
+                        <a
+                          href="https://console.cloud.google.com/apis/credentials/consent"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          OAuth consent screen
+                        </a>
+                        : <strong>Authorized domains</strong> → add{" "}
+                        <code>github.io</code>
+                      </li>
+                      <li>
+                        Same screen: if status is <strong>Testing</strong>, add
+                        your Gmail under <strong>Test users</strong>
+                      </li>
+                      <li>
+                        Enable{" "}
+                        <a
+                          href="https://console.cloud.google.com/apis/library/drive.googleapis.com"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Google Drive API
+                        </a>{" "}
+                        and add scope <code>drive.file</code> on the consent
+                        screen
+                      </li>
+                      <li>
+                        Use Chrome/Safari (not an in-app browser). Click
+                        “Error details” on Google’s page for the exact code.
+                      </li>
+                    </ol>
+                  </details>
                   <button
                     type="button"
                     className="btn btn-primary"

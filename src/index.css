@@ -213,6 +213,22 @@ textarea {
   border-radius: 4px;
 }
 
+.google-setup-details {
+  font-size: 0.85rem;
+}
+
+.google-setup-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.google-setup-list {
+  margin: 0.5rem 0 0 1.1rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
 @media (min-width: 768px) {
   .header {
     padding: 1.5rem 2rem;
