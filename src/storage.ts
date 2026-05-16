@@ -1,7 +1,9 @@
 import type { AppData, BillItem, ItemBill } from "./types";
 import { createId } from "./ids";
+import { dataToText, ensureIds, textToData } from "./textBackup";
 
 const STORAGE_KEY = "shop-expense-tracker";
+const TEXT_BACKUP_KEY = "shop-expense-tracker-backup-text";
 
 export const defaultData: AppData = {
   itemBills: [],
@@ -67,15 +69,37 @@ function migrateLegacy(parsed: Record<string, unknown>): AppData {
 export function loadData(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...defaultData };
-    return migrateLegacy(JSON.parse(raw) as Record<string, unknown>);
+    if (raw) {
+      const data = migrateLegacy(JSON.parse(raw) as Record<string, unknown>);
+      syncTextBackup(data);
+      return data;
+    }
+
+    const text = localStorage.getItem(TEXT_BACKUP_KEY);
+    if (text?.trim()) {
+      const data = ensureIds(textToData(text));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      return data;
+    }
   } catch {
-    return { ...defaultData };
+    /* fall through */
   }
+  return { ...defaultData };
+}
+
+export function syncTextBackup(data: AppData): void {
+  localStorage.setItem(TEXT_BACKUP_KEY, dataToText(data));
+}
+
+export function getTextBackup(): string {
+  const text = localStorage.getItem(TEXT_BACKUP_KEY);
+  if (text) return text;
+  return dataToText(loadData());
 }
 
 export function saveData(data: AppData): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  syncTextBackup(data);
 }
 
 export function billTotal(bill: ItemBill): number {

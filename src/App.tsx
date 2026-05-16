@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AppData, BillItem, ItemBill } from "./types";
 import { billTotal, loadData, saveData } from "./storage";
 import { createId } from "./ids";
 import { formatCurrency, formatDateTime } from "./utils";
-import { loadGithubConfig, isGithubConnected } from "./githubConfig";
-import { autoLoadGithub, autoSaveGithub } from "./githubStorage";
-import { GithubBackup } from "./GithubBackup";
+import { TextBackupPanel } from "./TextBackupPanel";
 
 type Screen = "home" | "edit";
 type Tab = "items" | "labour";
@@ -19,12 +17,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("items");
-  const [githubReady, setGithubReady] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<
-    "local" | "loading" | "saving" | "saved" | "error"
-  >("local");
-  const githubConfig = useRef(loadGithubConfig());
-  const skipGithubSave = useRef(true);
+  const [textBackupAt, setTextBackupAt] = useState(() => Date.now());
 
   const [shopName, setShopName] = useState("");
   const [itemName, setItemName] = useState("");
@@ -35,45 +28,9 @@ export default function App() {
   const [labourAmount, setLabourAmount] = useState("");
 
   useEffect(() => {
-    const config = githubConfig.current;
-    if (!isGithubConnected(config)) {
-      setGithubReady(true);
-      setSyncStatus("local");
-      return;
-    }
-    setSyncStatus("loading");
-    autoLoadGithub(config)
-      .then((loaded) => {
-        if (loaded) setData(loaded);
-        setSyncStatus("saved");
-        setGithubReady(true);
-      })
-      .catch(() => {
-        setSyncStatus("error");
-        setGithubReady(true);
-      });
-  }, []);
-
-  useEffect(() => {
     saveData(data);
-    if (!githubReady || skipGithubSave.current) {
-      skipGithubSave.current = false;
-      return;
-    }
-    const config = githubConfig.current;
-    if (!isGithubConnected(config)) {
-      setSyncStatus("local");
-      return;
-    }
-
-    setSyncStatus("saving");
-    const timer = window.setTimeout(() => {
-      autoSaveGithub(config, data)
-        .then(() => setSyncStatus("saved"))
-        .catch(() => setSyncStatus("error"));
-    }, 800);
-    return () => window.clearTimeout(timer);
-  }, [data, githubReady]);
+    setTextBackupAt(Date.now());
+  }, [data]);
 
   const itemsTotal = useMemo(
     () => data.itemBills.reduce((s, b) => s + billTotal(b), 0),
@@ -205,19 +162,7 @@ export default function App() {
             <h1>Shop Expense Tracker</h1>
             <p>Add items &amp; labour below · toggle saved billing with tabs</p>
           </div>
-          <GithubBackup
-            data={data}
-            syncStatus={syncStatus}
-            onConfigChange={(next) => {
-              githubConfig.current = next;
-              if (!isGithubConnected(next)) setSyncStatus("local");
-            }}
-            onDataLoaded={(loaded) => {
-              skipGithubSave.current = true;
-              setData(loaded);
-              setSyncStatus("saved");
-            }}
-          />
+          <TextBackupPanel data={data} savedAt={textBackupAt} />
         </div>
       </header>
 
@@ -481,8 +426,8 @@ export default function App() {
       </div>
 
       <p className="footer-note">
-        Data saves on this device. Tap the button above to auto-save a text
-        file to GitHub (<code>data/expenses.txt</code>).
+        All data auto-syncs to a text backup on this device. Tap{" "}
+        <strong>Text backup saved</strong> to view, copy, or download.
       </p>
     </div>
   );

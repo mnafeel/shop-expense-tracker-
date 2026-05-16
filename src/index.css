@@ -126,7 +126,7 @@ textarea {
   gap: 0.75rem;
 }
 
-.cloud-status-btn {
+.text-backup-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -140,22 +140,18 @@ textarea {
   white-space: nowrap;
 }
 
-.cloud-status-btn.connected {
+.text-backup-btn.synced {
   background: rgba(255, 255, 255, 0.22);
 }
 
-.cloud-dot {
+.text-backup-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #fbbf24;
-}
-
-.cloud-status-btn.connected .cloud-dot {
   background: #6ee7b7;
 }
 
-.cloud-modal-backdrop {
+.text-backup-backdrop {
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -166,51 +162,34 @@ textarea {
   padding: 1rem;
 }
 
-.cloud-modal {
-  width: min(100%, 420px);
+.text-backup-modal {
+  width: min(100%, 520px);
   max-height: 90dvh;
   overflow-y: auto;
 }
 
-.cloud-modal .card-header {
+.text-backup-modal .card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.cloud-provider-tabs {
-  display: flex;
-  gap: 0.35rem;
+.text-backup-preview {
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  min-height: 200px;
 }
 
-.cloud-provider-tabs .tab {
-  flex: 1;
-  padding: 0.5rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  font-weight: 600;
-  background: var(--surface-2);
-  color: var(--text-muted);
-  border: 1.5px solid var(--border);
-}
-
-.cloud-provider-tabs .tab.active {
-  background: var(--primary-light);
-  color: var(--primary);
-  border-color: var(--primary);
-}
-
-.cloud-connected-actions {
+.text-backup-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
 }
 
-.cloud-modal code {
-  font-size: 0.8em;
-  background: var(--surface-2);
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
+.text-backup-actions .btn {
+  flex: 1;
+  min-width: 120px;
 }
 
 @media (min-width: 768px) {
