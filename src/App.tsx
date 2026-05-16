@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppData, BillItem, ItemBill } from "./types";
 import { billTotal, loadData, saveData } from "./storage";
 import { createId } from "./ids";
 import { formatCurrency, formatDateTime } from "./utils";
+import { loadGithubConfig, isGithubConfigured } from "./githubConfig";
+import { GithubSyncPanel, autoLoadGithub, autoSaveGithub } from "./GithubSync";
 
 type Screen = "home" | "edit";
 type Tab = "items" | "labour";
@@ -16,6 +18,9 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("items");
+  const [githubReady, setGithubReady] = useState(false);
+  const githubConfig = useRef(loadGithubConfig());
+  const skipGithubSave = useRef(true);
 
   const [shopName, setShopName] = useState("");
   const [itemName, setItemName] = useState("");
@@ -26,8 +31,33 @@ export default function App() {
   const [labourAmount, setLabourAmount] = useState("");
 
   useEffect(() => {
+    const config = githubConfig.current;
+    if (!isGithubConfigured(config)) {
+      setGithubReady(true);
+      return;
+    }
+    autoLoadGithub(config)
+      .then((loaded) => {
+        if (loaded) setData(loaded);
+        setGithubReady(true);
+      })
+      .catch(() => setGithubReady(true));
+  }, []);
+
+  useEffect(() => {
     saveData(data);
-  }, [data]);
+    if (!githubReady || skipGithubSave.current) {
+      skipGithubSave.current = false;
+      return;
+    }
+    const config = githubConfig.current;
+    if (!isGithubConfigured(config)) return;
+
+    const timer = window.setTimeout(() => {
+      autoSaveGithub(config, data).catch(() => {});
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [data, githubReady]);
 
   const itemsTotal = useMemo(
     () => data.itemBills.reduce((s, b) => s + billTotal(b), 0),
@@ -417,7 +447,20 @@ export default function App() {
         </section>
       </div>
 
-      <p className="footer-note">Data saves automatically on this device.</p>
+      <GithubSyncPanel
+        data={data}
+        onConfigChange={(next) => {
+          githubConfig.current = next;
+        }}
+        onDataLoaded={(loaded) => {
+          skipGithubSave.current = true;
+          setData(loaded);
+        }}
+      />
+
+      <p className="footer-note">
+        Data saves on this device. Enable GitHub sync above to store in your repo.
+      </p>
     </div>
   );
 }

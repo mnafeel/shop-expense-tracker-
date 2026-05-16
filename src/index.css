@@ -981,6 +981,53 @@ label {
   border-top: 1px solid var(--border);
 }
 
+.github-sync-card {
+  margin-top: 1.25rem;
+}
+
+.github-sync-card code {
+  font-size: 0.8em;
+  background: var(--surface-2);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.checkbox-row input {
+  width: auto;
+}
+
+.github-sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.github-sync-actions .btn {
+  flex: 1;
+  min-width: 140px;
+}
+
+.sync-msg {
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.sync-ok {
+  color: var(--primary);
+}
+
+.sync-error {
+  color: var(--danger);
+}
+
 .draft-items-section label {
   display: block;
   font-size: 0.8rem;
