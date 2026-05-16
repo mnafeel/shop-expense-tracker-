@@ -25,7 +25,9 @@ git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
 git push -u origin main
 ```
 
-3. In the repo on GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+3. In the repo on GitHub: **Settings → Pages → Build and deployment**
+   - **Source** must be **GitHub Actions** (not “Deploy from branch”)
+   - If you see a blank page, this setting is usually wrong
 4. After the workflow runs, your site will be at:
 
 `https://YOUR_USERNAME.github.io/YOUR_REPO/`
