@@ -253,8 +253,9 @@ export function CloudBackup({
                       rel="noreferrer"
                     >
                       token
-                    </a>{" "}
-                    with <strong>Contents</strong> read &amp; write.
+                    </a>
+                    . Classic: check <strong>repo</strong>. Fine-grained: select
+                    this repo only, <strong>Contents → Read and write</strong>.
                   </p>
                   <div className="form-row two-col">
                     <div>

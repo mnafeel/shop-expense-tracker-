@@ -36,6 +36,30 @@ function apiUrl(config: GithubConfig): string {
   return `https://api.github.com/repos/${config.owner.trim()}/${config.repo.trim()}/contents/${DATA_PATH}`;
 }
 
+function githubErrorMessage(status: number, body: string): string {
+  try {
+    const err = JSON.parse(body) as { message?: string };
+    const msg = err.message ?? "";
+    if (
+      status === 403 &&
+      msg.toLowerCase().includes("personal access token")
+    ) {
+      return (
+        "Token cannot write to this repo. Use a classic token with the " +
+        "repo scope, or a fine-grained token with this repo selected and " +
+        "Contents set to Read and write."
+      );
+    }
+    if (status === 404) {
+      return "Repo not found. Check username and repo name (shop-expense-tracker-).";
+    }
+    if (msg) return msg;
+  } catch {
+    /* use fallback */
+  }
+  return body || `GitHub request failed (${status})`;
+}
+
 export async function loadFromGithub(config: GithubConfig): Promise<AppData> {
   const res = await fetch(apiUrl(config), {
     headers: authHeaders(config.token.trim()),
@@ -48,7 +72,7 @@ export async function loadFromGithub(config: GithubConfig): Promise<AppData> {
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(err || `GitHub load failed (${res.status})`);
+    throw new Error(githubErrorMessage(res.status, err));
   }
 
   const file = (await res.json()) as GithubFileResponse;
@@ -84,7 +108,7 @@ export async function saveToGithub(
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(err || `GitHub save failed (${res.status})`);
+    throw new Error(githubErrorMessage(res.status, err));
   }
 
   const result = (await res.json()) as { content: GithubFileResponse };
