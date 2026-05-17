@@ -118,6 +118,87 @@ textarea {
   margin-top: 0.25rem;
 }
 
+.header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.sync-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.4rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  white-space: nowrap;
+}
+
+.sync-status-btn.synced {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fbbf24;
+}
+
+.sync-status-btn.synced .sync-dot {
+  background: #6ee7b7;
+}
+
+.sync-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.sync-modal {
+  width: min(100%, 420px);
+  max-height: 90dvh;
+  overflow-y: auto;
+}
+
+.sync-modal .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sync-code-display {
+  font-size: 1.1rem;
+  text-align: center;
+  padding: 0.5rem;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.sync-msg {
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.sync-ok {
+  color: var(--primary);
+}
+
+.sync-error {
+  color: var(--danger);
+}
+
 @media (min-width: 768px) {
   .header {
     padding: 1.5rem 2rem;

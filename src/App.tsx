@@ -1,8 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppData, BillItem, ItemBill } from "./types";
 import { billTotal, loadData, saveData } from "./storage";
 import { createId } from "./ids";
 import { formatCurrency, formatDateTime } from "./utils";
+import {
+  fetchCloudData,
+  getSyncCode,
+  pushCloudData,
+  subscribeCloudData,
+} from "./deviceSync";
+import { isCloudSyncAvailable } from "./firebase";
+import { SyncPanel, type SyncStatus } from "./SyncPanel";
+
 type Screen = "home" | "edit";
 type Tab = "items" | "labour";
 
@@ -22,9 +31,79 @@ export default function App() {
 
   const [labourDesc, setLabourDesc] = useState("");
   const [labourAmount, setLabourAmount] = useState("");
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("local");
+  const [syncKey, setSyncKey] = useState(0);
+  const skipCloudPush = useRef(false);
+  const lastRemoteAt = useRef(0);
+
+  useEffect(() => {
+    if (!isCloudSyncAvailable()) return;
+
+    const code = getSyncCode();
+    if (!code) return;
+
+    setSyncStatus("syncing");
+    fetchCloudData(code)
+      .then((remote) => {
+        if (remote && remote.updatedAt > lastRemoteAt.current) {
+          lastRemoteAt.current = remote.updatedAt;
+          skipCloudPush.current = true;
+          const next: AppData = {
+            itemBills: remote.itemBills,
+            labour: remote.labour,
+          };
+          setData(next);
+          saveData(next);
+        }
+        setSyncStatus("synced");
+      })
+      .catch(() => setSyncStatus("error"));
+
+    const unsub = subscribeCloudData(
+      code,
+      (remote) => {
+        if (remote.updatedAt <= lastRemoteAt.current) return;
+        lastRemoteAt.current = remote.updatedAt;
+        skipCloudPush.current = true;
+        const next: AppData = {
+          itemBills: remote.itemBills,
+          labour: remote.labour,
+        };
+        setData(next);
+        saveData(next);
+        setSyncStatus("synced");
+      },
+      () => setSyncStatus("error")
+    );
+
+    return unsub;
+  }, [syncKey]);
 
   useEffect(() => {
     saveData(data);
+
+    if (!isCloudSyncAvailable()) return;
+    const code = getSyncCode();
+    if (!code) {
+      setSyncStatus("local");
+      return;
+    }
+
+    if (skipCloudPush.current) {
+      skipCloudPush.current = false;
+      return;
+    }
+
+    setSyncStatus("syncing");
+    const timer = window.setTimeout(() => {
+      pushCloudData(code, data)
+        .then(() => {
+          lastRemoteAt.current = Date.now();
+          setSyncStatus("synced");
+        })
+        .catch(() => setSyncStatus("error"));
+    }, 400);
+    return () => window.clearTimeout(timer);
   }, [data]);
 
   const itemsTotal = useMemo(
@@ -152,8 +231,16 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1>Shop Expense Tracker</h1>
-        <p>Add items &amp; labour below · toggle saved billing with tabs</p>
+        <div className="header-row">
+          <div>
+            <h1>Shop Expense Tracker</h1>
+            <p>Add items &amp; labour below · auto-syncs across your devices</p>
+          </div>
+          <SyncPanel
+            syncStatus={syncStatus}
+            onCodeChange={() => setSyncKey((k) => k + 1)}
+          />
+        </div>
       </header>
 
       <section className="summary-bar" aria-label="Totals">
@@ -415,7 +502,10 @@ export default function App() {
         </section>
       </div>
 
-      <p className="footer-note">Data saves automatically on this device.</p>
+      <p className="footer-note">
+        Data saves on this device and syncs to the cloud when you set a sync code.
+        Use the same code on every phone or computer.
+      </p>
     </div>
   );
 }
