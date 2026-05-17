@@ -192,6 +192,32 @@ textarea {
   min-width: 120px;
 }
 
+.backup-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.25rem 0;
+}
+
+.sync-msg {
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.sync-ok {
+  color: var(--primary);
+}
+
+.sync-error {
+  color: var(--danger);
+}
+
+.text-backup-modal code {
+  font-size: 0.8em;
+  background: var(--surface-2);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
 @media (min-width: 768px) {
   .header {
     padding: 1.5rem 2rem;

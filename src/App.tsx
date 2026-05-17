@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppData, BillItem, ItemBill } from "./types";
 import { billTotal, loadData, saveData } from "./storage";
 import { createId } from "./ids";
 import { formatCurrency, formatDateTime } from "./utils";
-import { TextBackupPanel } from "./TextBackupPanel";
+import { isGithubConnected, loadGithubConfig } from "./githubConfig";
+import { pullTextFromGithub, pushTextToGithub } from "./githubTextSync";
+import { TextBackupPanel, type SyncStatus } from "./TextBackupPanel";
 
 type Screen = "home" | "edit";
 type Tab = "items" | "labour";
@@ -18,6 +20,10 @@ export default function App() {
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("items");
   const [textBackupAt, setTextBackupAt] = useState(() => Date.now());
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("local");
+  const githubConfig = useRef(loadGithubConfig());
+  const skipGithubPush = useRef(true);
+  const githubReady = useRef(false);
 
   const [shopName, setShopName] = useState("");
   const [itemName, setItemName] = useState("");
@@ -28,8 +34,47 @@ export default function App() {
   const [labourAmount, setLabourAmount] = useState("");
 
   useEffect(() => {
+    const config = githubConfig.current;
+    if (!isGithubConnected(config)) {
+      githubReady.current = true;
+      return;
+    }
+    setSyncStatus("loading");
+    pullTextFromGithub(config)
+      .then((loaded) => {
+        setData(loaded);
+        setTextBackupAt(Date.now());
+        setSyncStatus("synced");
+        githubReady.current = true;
+      })
+      .catch(() => {
+        setSyncStatus("error");
+        githubReady.current = true;
+      });
+  }, []);
+
+  useEffect(() => {
     saveData(data);
     setTextBackupAt(Date.now());
+
+    if (!githubReady.current || skipGithubPush.current) {
+      skipGithubPush.current = false;
+      return;
+    }
+
+    const config = githubConfig.current;
+    if (!isGithubConnected(config)) {
+      setSyncStatus("local");
+      return;
+    }
+
+    setSyncStatus("saving");
+    const timer = window.setTimeout(() => {
+      pushTextToGithub(config, data)
+        .then(() => setSyncStatus("synced"))
+        .catch(() => setSyncStatus("error"));
+    }, 800);
+    return () => window.clearTimeout(timer);
   }, [data]);
 
   const itemsTotal = useMemo(
@@ -162,7 +207,21 @@ export default function App() {
             <h1>Shop Expense Tracker</h1>
             <p>Add items &amp; labour below · toggle saved billing with tabs</p>
           </div>
-          <TextBackupPanel data={data} savedAt={textBackupAt} />
+          <TextBackupPanel
+            data={data}
+            savedAt={textBackupAt}
+            syncStatus={syncStatus}
+            onConfigChange={(next) => {
+              githubConfig.current = next;
+              if (!isGithubConnected(next)) setSyncStatus("local");
+            }}
+            onDataFromGithub={(loaded) => {
+              skipGithubPush.current = true;
+              setData(loaded);
+              setTextBackupAt(Date.now());
+              setSyncStatus("synced");
+            }}
+          />
         </div>
       </header>
 
@@ -426,8 +485,8 @@ export default function App() {
       </div>
 
       <p className="footer-note">
-        All data auto-syncs to a text backup on this device. Tap{" "}
-        <strong>Text backup saved</strong> to view, copy, or download.
+        Items, dates &amp; labour auto-save as text on this device and push to{" "}
+        <code>data/expenses.txt</code> on GitHub when connected.
       </p>
     </div>
   );
