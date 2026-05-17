@@ -3,8 +3,6 @@ import type { AppData, BillItem, ItemBill } from "./types";
 import { billTotal, loadData, saveData } from "./storage";
 import { createId } from "./ids";
 import { formatCurrency, formatDateTime } from "./utils";
-import { TextBackupPanel } from "./TextBackupPanel";
-
 type Screen = "home" | "edit";
 type Tab = "items" | "labour";
 
@@ -17,8 +15,6 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("items");
-  const [textBackupAt, setTextBackupAt] = useState(() => Date.now());
-
   const [shopName, setShopName] = useState("");
   const [itemName, setItemName] = useState("");
   const [itemPrice, setItemPrice] = useState("");
@@ -29,7 +25,6 @@ export default function App() {
 
   useEffect(() => {
     saveData(data);
-    setTextBackupAt(Date.now());
   }, [data]);
 
   const itemsTotal = useMemo(
@@ -157,20 +152,8 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <div className="header-row">
-          <div>
-            <h1>Shop Expense Tracker</h1>
-            <p>Add items &amp; labour below · toggle saved billing with tabs</p>
-          </div>
-          <TextBackupPanel
-            data={data}
-            savedAt={textBackupAt}
-            onImport={(imported) => {
-              setData(imported);
-              setTextBackupAt(Date.now());
-            }}
-          />
-        </div>
+        <h1>Shop Expense Tracker</h1>
+        <p>Add items &amp; labour below · toggle saved billing with tabs</p>
       </header>
 
       <section className="summary-bar" aria-label="Totals">
@@ -432,10 +415,7 @@ export default function App() {
         </section>
       </div>
 
-      <p className="footer-note">
-        Tap <strong>Backup · all devices</strong> to copy or share your data and
-        open it on phone, laptop, or tablet.
-      </p>
+      <p className="footer-note">Data saves automatically on this device.</p>
     </div>
   );
 }
