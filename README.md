@@ -1,6 +1,6 @@
 # Shop Expense Tracker
 
-Track shop purchases and labour expenses. Data saves in your browser (localStorage).
+Track shop purchases and labour expenses. Data saves to Firebase Firestore when you connect with a sync code.
 
 ## Run locally
 

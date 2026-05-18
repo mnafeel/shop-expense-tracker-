@@ -1,7 +1,7 @@
 import type { AppData, BillItem, ItemBill } from "./types";
 import { createId } from "./ids";
 
-const STORAGE_KEY = "shop-expense-tracker";
+const LEGACY_STORAGE_KEY = "shop-expense-tracker";
 
 export const defaultData: AppData = {
   itemBills: [],
@@ -64,18 +64,17 @@ function migrateLegacy(parsed: Record<string, unknown>): AppData {
   return { itemBills: [], labour: [] };
 }
 
-export function loadData(): AppData {
+/** One-time read of browser local backup; removes the key after read. */
+export function consumeLegacyLocalBackup(): AppData | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...defaultData };
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!raw) return null;
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
     return migrateLegacy(JSON.parse(raw) as Record<string, unknown>);
   } catch {
-    return { ...defaultData };
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    return null;
   }
-}
-
-export function saveData(data: AppData): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
 export function billTotal(bill: ItemBill): number {

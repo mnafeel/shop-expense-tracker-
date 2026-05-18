@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AppData, BillItem, ItemBill } from "./types";
-import { billTotal, loadData, saveData } from "./storage";
+import type { AppData, BillItem, ItemBill, LabourEntry } from "./types";
+import { billTotal, consumeLegacyLocalBackup, defaultData } from "./storage";
 import { createId } from "./ids";
 import { formatCurrency, formatDateTime } from "./utils";
 import {
@@ -12,7 +12,7 @@ import {
 import { isCloudSyncAvailable } from "./firebase";
 import { SyncPanel, type SyncStatus } from "./SyncPanel";
 
-type Screen = "home" | "edit";
+type Screen = "home" | "edit" | "editLabour";
 type Tab = "items" | "labour";
 
 type DraftItem = { id: string; itemName: string; price: number };
@@ -20,9 +20,10 @@ type DraftItem = { id: string; itemName: string; price: number };
 const now = () => new Date().toISOString();
 
 export default function App() {
-  const [data, setData] = useState<AppData>(loadData);
+  const [data, setData] = useState<AppData>(defaultData);
   const [screen, setScreen] = useState<Screen>("home");
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
+  const [editingLabourId, setEditingLabourId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("items");
   const [shopName, setShopName] = useState("");
   const [itemName, setItemName] = useState("");
@@ -71,16 +72,21 @@ export default function App() {
             remote.updatedAt > 0);
 
         if (hasRemote && remote) {
+          consumeLegacyLocalBackup();
           lastRemoteAt.current = remote.updatedAt;
           skipCloudPush.current = true;
-          const next: AppData = {
+          setData({
             itemBills: remote.itemBills,
             labour: remote.labour,
-          };
-          setData(next);
-          saveData(next);
+          });
         } else {
-          await pushCloudData(code, dataRef.current);
+          const legacy = consumeLegacyLocalBackup();
+          const toSync = legacy ?? dataRef.current;
+          if (legacy) {
+            skipCloudPush.current = true;
+            setData(legacy);
+          }
+          await pushCloudData(code, toSync);
           lastRemoteAt.current = Date.now();
         }
         setSyncStatus("synced");
@@ -102,12 +108,10 @@ export default function App() {
         if (remote.updatedAt <= lastRemoteAt.current) return;
         lastRemoteAt.current = remote.updatedAt;
         skipCloudPush.current = true;
-        const next: AppData = {
+        setData({
           itemBills: remote.itemBills,
           labour: remote.labour,
-        };
-        setData(next);
-        saveData(next);
+        });
         setSyncStatus("synced");
         setSyncError("");
       },
@@ -124,8 +128,6 @@ export default function App() {
   }, [syncKey]);
 
   useEffect(() => {
-    saveData(data);
-
     if (!isCloudSyncAvailable() || !cloudReady) return;
     const code = getSyncCode();
     if (!code) {
@@ -173,9 +175,15 @@ export default function App() {
     setScreen("edit");
   };
 
+  const openLabourEdit = (labourId: string) => {
+    setEditingLabourId(labourId);
+    setScreen("editLabour");
+  };
+
   const goHome = () => {
     setScreen("home");
     setEditingBillId(null);
+    setEditingLabourId(null);
   };
 
   const removeBill = (billId: string) => {
@@ -272,6 +280,31 @@ export default function App() {
         }}
         onDelete={() => {
           removeBill(bill.id);
+          goHome();
+        }}
+      />
+    );
+  }
+
+  if (screen === "editLabour" && editingLabourId) {
+    const entry = data.labour.find((l) => l.id === editingLabourId);
+    if (!entry) {
+      goHome();
+      return null;
+    }
+    return (
+      <EditLabourScreen
+        entry={entry}
+        onBack={goHome}
+        onSave={(updated) => {
+          setData((d) => ({
+            ...d,
+            labour: d.labour.map((l) => (l.id === updated.id ? updated : l)),
+          }));
+          goHome();
+        }}
+        onDelete={() => {
+          removeLabour(entry.id);
           goHome();
         }}
       />
@@ -542,6 +575,13 @@ export default function App() {
                     <div className="item-actions">
                       <button
                         type="button"
+                        className="btn-edit"
+                        onClick={() => openLabourEdit(entry.id)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
                         className="btn-ghost"
                         onClick={() => removeLabour(entry.id)}
                       >
@@ -577,6 +617,86 @@ function ScreenHeader({
         ← Back
       </button>
       <h2>{title}</h2>
+    </div>
+  );
+}
+
+function EditLabourScreen({
+  entry,
+  onBack,
+  onSave,
+  onDelete,
+}: {
+  entry: LabourEntry;
+  onBack: () => void;
+  onSave: (entry: LabourEntry) => void;
+  onDelete: () => void;
+}) {
+  const [description, setDescription] = useState(entry.description);
+  const [amount, setAmount] = useState(String(entry.amount));
+
+  const handleSave = () => {
+    const desc = description.trim();
+    const parsed = parseFloat(amount);
+    if (!desc || isNaN(parsed) || parsed < 0) return;
+    onSave({ ...entry, description: desc, amount: parsed });
+  };
+
+  return (
+    <div className="app screen-page labour-edit-page">
+      <header className="header compact">
+        <h1>Edit Labour</h1>
+      </header>
+      <ScreenHeader title="Edit labour entry" onBack={onBack} />
+
+      <section className="card labour-card">
+        <div className="card-body form-grid">
+          <p className="hint labour-time-hint">
+            Added: {formatDateTime(entry.addedAt)}
+          </p>
+          <div>
+            <label htmlFor="editLabourDesc">Description</label>
+            <input
+              id="editLabourDesc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Mason, electrician..."
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="editLabourAmount">Amount (₹)</label>
+            <input
+              id="editLabourAmount"
+              type="number"
+              min="0"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+              required
+            />
+          </div>
+
+          <div className="screen-actions">
+            <button
+              type="button"
+              className="btn btn-labour btn-large"
+              onClick={handleSave}
+              disabled={
+                !description.trim() ||
+                isNaN(parseFloat(amount)) ||
+                parseFloat(amount) < 0
+              }
+            >
+              Save changes
+            </button>
+            <button type="button" className="btn-ghost" onClick={onDelete}>
+              Delete entry
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

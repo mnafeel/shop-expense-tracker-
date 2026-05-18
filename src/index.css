@@ -555,7 +555,10 @@ label {
 .item-actions {
   grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   justify-content: flex-end;
+  align-items: center;
   padding-top: 0.25rem;
   border-top: 1px dashed var(--border);
   margin-top: 0.25rem;
@@ -1152,6 +1155,15 @@ label {
 
 .btn-edit:hover {
   background: #99f6e4;
+}
+
+.item-card.labour .btn-edit {
+  color: var(--labour);
+  background: var(--labour-light);
+}
+
+.item-card.labour .btn-edit:hover {
+  background: #ddd6fe;
 }
 
 .bill-header-actions {
