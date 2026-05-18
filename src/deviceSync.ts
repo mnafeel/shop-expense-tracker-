@@ -62,7 +62,9 @@ export async function pushCloudData(
   code: string,
   data: AppData
 ): Promise<void> {
-  if (!isCloudSyncAvailable()) return;
+  if (!isCloudSyncAvailable()) {
+    throw new Error("Firebase database not configured");
+  }
 
   const payload: CloudPayload = {
     itemBills: data.itemBills,
@@ -70,7 +72,17 @@ export async function pushCloudData(
     updatedAt: Date.now(),
   };
 
-  await setDoc(docRef(code), payload);
+  try {
+    await setDoc(docRef(code), payload);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Firestore write failed";
+    if (msg.includes("permission") || msg.includes("PERMISSION_DENIED")) {
+      throw new Error(
+        "Firestore rules blocked save. Publish firestore.rules in Firebase Console."
+      );
+    }
+    throw new Error(msg);
+  }
 }
 
 export async function fetchCloudData(

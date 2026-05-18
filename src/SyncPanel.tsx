@@ -11,9 +11,11 @@ export type SyncStatus = "local" | "syncing" | "synced" | "error";
 
 export function SyncPanel({
   syncStatus,
+  syncError,
   onCodeChange,
 }: {
   syncStatus: SyncStatus;
+  syncError?: string;
   onCodeChange: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -23,18 +25,20 @@ export function SyncPanel({
   const cloudOk = isCloudSyncAvailable();
 
   const statusLabel = () => {
-    if (!cloudOk) return "Sync setup needed";
-    if (!code) return "Set up sync";
-    if (syncStatus === "syncing") return "Syncing…";
-    if (syncStatus === "error") return "Sync error";
-    if (syncStatus === "synced") return `Synced · ${code}`;
-    return `Sync · ${code}`;
+    if (!cloudOk) return "Database setup needed";
+    if (!code) return "Connect once";
+    if (syncStatus === "syncing") return "Saving to cloud…";
+    if (syncStatus === "error") return "Cloud save failed";
+    if (syncStatus === "synced") return "Saved to cloud";
+    return `Cloud · ${code}`;
   };
 
   const applyCode = (newCode: string) => {
     saveSyncCode(newCode);
     onCodeChange();
-    setMessage(`Sync code ${newCode} — use the same code on your other devices.`);
+    setMessage(
+      `Connected. All items and labour now save to the database automatically.`
+    );
     setOpen(false);
   };
 
@@ -62,7 +66,7 @@ export function SyncPanel({
     <>
       <button
         type="button"
-        className={`sync-status-btn ${syncStatus === "synced" ? "synced" : ""}`}
+        className={`sync-status-btn ${syncStatus === "synced" && code ? "synced" : ""}`}
         onClick={() => setOpen(true)}
       >
         <span className="sync-dot" aria-hidden />
@@ -78,7 +82,7 @@ export function SyncPanel({
             aria-labelledby="sync-title"
           >
             <div className="card-header">
-              <h2 id="sync-title">Sync all devices</h2>
+              <h2 id="sync-title">Cloud database</h2>
               <button
                 type="button"
                 className="btn-ghost btn-xs"
@@ -92,68 +96,46 @@ export function SyncPanel({
               {!cloudOk ? (
                 <div className="firebase-setup">
                   <p className="hint sync-error">
-                    Firebase is not connected yet. Complete these steps once:
+                    Firebase database is not connected on this build.
                   </p>
-                  <ol className="hint setup-steps">
-                    <li>
-                      Open{" "}
-                      <a
-                        href="https://console.firebase.google.com"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Firebase Console
-                      </a>{" "}
-                      → Create project (e.g. <code>shop-expense-tracker</code>)
-                    </li>
-                    <li>
-                      <strong>Build → Firestore Database</strong> → Create
-                      database (start in test mode)
-                    </li>
-                    <li>
-                      <strong>Rules</strong> tab → paste rules from{" "}
-                      <code>firestore.rules</code> in your GitHub repo →
-                      Publish
-                    </li>
-                    <li>
-                      <strong>Project settings → Your apps → Web (&lt;/&gt;)</strong>{" "}
-                      → register app → copy the config values
-                    </li>
-                    <li>
-                      GitHub repo → <strong>Settings → Secrets → Actions</strong>{" "}
-                      → add all 6 <code>VITE_FIREBASE_*</code> secrets
-                    </li>
-                    <li>
-                      Firebase → <strong>Authentication → Settings</strong> →
-                      Authorized domains → add <code>mnafeel.github.io</code>
-                    </li>
-                    <li>
-                      Re-run deploy (push to <code>main</code> or Actions →
-                      Run workflow)
-                    </li>
-                  </ol>
                   <p className="hint">
-                    After deploy, refresh this page → <strong>Set up sync</strong>{" "}
-                    → create a code → use the same code on every device.
+                    In{" "}
+                    <a
+                      href="https://console.firebase.google.com/project/shop-expense-tracker-cf6ae/firestore"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Firebase Console
+                    </a>
+                    : enable <strong>Firestore</strong>, publish rules from{" "}
+                    <code>firestore.rules</code>, then redeploy the app.
                   </p>
                 </div>
               ) : (
                 <>
                   <p className="hint">
-                    No backup buttons — your items, dates, and labour save to
-                    the cloud <strong>automatically</strong> and appear on every
-                    device that uses the <strong>same sync code</strong>.
+                    Connect once with a sync code. Every item, date, and labour
+                    entry saves to the <strong>Firestore database</strong>{" "}
+                    automatically — no backup buttons needed.
                   </p>
 
                   {code ? (
                     <>
                       <p className="sync-code-display">
-                        Your code: <strong>{code}</strong>
+                        Sync code: <strong>{code}</strong>
                       </p>
                       <p className="hint">
-                        On phone, laptop, or tablet: open this app → enter this
-                        code. Changes sync within seconds.
+                        Use this same code on phone, laptop, or tablet. Changes
+                        appear on all devices within seconds.
                       </p>
+                      {syncStatus === "synced" && (
+                        <p className="sync-msg sync-ok">
+                          Database connected — auto-save is on.
+                        </p>
+                      )}
+                      {syncError && (
+                        <p className="sync-msg sync-error">{syncError}</p>
+                      )}
                       <button
                         type="button"
                         className="btn btn-ghost"
@@ -169,9 +151,9 @@ export function SyncPanel({
                         className="btn btn-primary"
                         onClick={handleCreate}
                       >
-                        Create new sync code
+                        Create sync code
                       </button>
-                      <p className="hint">Or join an existing one:</p>
+                      <p className="hint">Or join an existing database:</p>
                       <input
                         value={input}
                         onChange={(e) =>
@@ -185,7 +167,7 @@ export function SyncPanel({
                         className="btn btn-secondary"
                         onClick={handleJoin}
                       >
-                        Connect with code
+                        Connect
                       </button>
                     </>
                   )}

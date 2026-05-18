@@ -32,20 +32,45 @@ export default function App() {
   const [labourDesc, setLabourDesc] = useState("");
   const [labourAmount, setLabourAmount] = useState("");
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("local");
+  const [syncError, setSyncError] = useState("");
+  const [cloudReady, setCloudReady] = useState(false);
   const [syncKey, setSyncKey] = useState(0);
   const skipCloudPush = useRef(false);
   const lastRemoteAt = useRef(0);
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
   useEffect(() => {
-    if (!isCloudSyncAvailable()) return;
+    if (!isCloudSyncAvailable()) {
+      setCloudReady(true);
+      setSyncStatus("local");
+      return;
+    }
 
     const code = getSyncCode();
-    if (!code) return;
+    if (!code) {
+      setCloudReady(true);
+      setSyncStatus("local");
+      return;
+    }
 
+    setCloudReady(false);
     setSyncStatus("syncing");
-    fetchCloudData(code)
-      .then((remote) => {
-        if (remote && remote.updatedAt > lastRemoteAt.current) {
+    setSyncError("");
+    let active = true;
+
+    (async () => {
+      try {
+        const remote = await fetchCloudData(code);
+        if (!active) return;
+
+        const hasRemote =
+          remote &&
+          (remote.itemBills.length > 0 ||
+            remote.labour.length > 0 ||
+            remote.updatedAt > 0);
+
+        if (hasRemote && remote) {
           lastRemoteAt.current = remote.updatedAt;
           skipCloudPush.current = true;
           const next: AppData = {
@@ -54,10 +79,22 @@ export default function App() {
           };
           setData(next);
           saveData(next);
+        } else {
+          await pushCloudData(code, dataRef.current);
+          lastRemoteAt.current = Date.now();
         }
         setSyncStatus("synced");
-      })
-      .catch(() => setSyncStatus("error"));
+      } catch (e) {
+        if (active) {
+          setSyncStatus("error");
+          setSyncError(
+            e instanceof Error ? e.message : "Could not connect to cloud"
+          );
+        }
+      } finally {
+        if (active) setCloudReady(true);
+      }
+    })();
 
     const unsub = subscribeCloudData(
       code,
@@ -72,17 +109,24 @@ export default function App() {
         setData(next);
         saveData(next);
         setSyncStatus("synced");
+        setSyncError("");
       },
-      () => setSyncStatus("error")
+      () => {
+        setSyncStatus("error");
+        setSyncError("Lost connection to cloud database");
+      }
     );
 
-    return unsub;
+    return () => {
+      active = false;
+      unsub();
+    };
   }, [syncKey]);
 
   useEffect(() => {
     saveData(data);
 
-    if (!isCloudSyncAvailable()) return;
+    if (!isCloudSyncAvailable() || !cloudReady) return;
     const code = getSyncCode();
     if (!code) {
       setSyncStatus("local");
@@ -95,16 +139,22 @@ export default function App() {
     }
 
     setSyncStatus("syncing");
+    setSyncError("");
     const timer = window.setTimeout(() => {
       pushCloudData(code, data)
         .then(() => {
           lastRemoteAt.current = Date.now();
           setSyncStatus("synced");
         })
-        .catch(() => setSyncStatus("error"));
+        .catch((e) => {
+          setSyncStatus("error");
+          setSyncError(
+            e instanceof Error ? e.message : "Could not save to cloud"
+          );
+        });
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [data]);
+  }, [data, cloudReady]);
 
   const itemsTotal = useMemo(
     () => data.itemBills.reduce((s, b) => s + billTotal(b), 0),
@@ -234,11 +284,15 @@ export default function App() {
         <div className="header-row">
           <div>
             <h1>Shop Expense Tracker</h1>
-            <p>Add items &amp; labour below · auto-syncs across your devices</p>
+            <p>Add items &amp; labour · auto-saves to cloud database</p>
           </div>
           <SyncPanel
             syncStatus={syncStatus}
-            onCodeChange={() => setSyncKey((k) => k + 1)}
+            syncError={syncError}
+            onCodeChange={() => {
+              setSyncError("");
+              setSyncKey((k) => k + 1);
+            }}
           />
         </div>
       </header>
@@ -503,8 +557,8 @@ export default function App() {
       </div>
 
       <p className="footer-note">
-        Data saves on this device and syncs to the cloud when you set a sync code.
-        Use the same code on every phone or computer.
+        Data saves automatically to the cloud database when connected. Set a sync
+        code once, then use the same code on every device.
       </p>
     </div>
   );
