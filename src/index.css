@@ -281,6 +281,83 @@ textarea {
   margin-top: 0.15rem;
 }
 
+/* Export / download */
+.export-panel {
+  margin-bottom: 1.25rem;
+}
+
+.export-panel .card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.export-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.export-badge {
+  background: var(--accent-light);
+  color: #b45309;
+}
+
+.export-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+@media (min-width: 480px) {
+  .export-actions {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.btn-export {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: var(--radius-sm);
+  color: white;
+  border: none;
+}
+
+.btn-export:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-export-json {
+  background: #334155;
+}
+
+.btn-export-json:hover:not(:disabled) {
+  background: #1e293b;
+}
+
+.btn-export-csv {
+  background: #0369a1;
+}
+
+.btn-export-csv:hover:not(:disabled) {
+  background: #075985;
+}
+
+.btn-export-pdf {
+  background: #b45309;
+}
+
+.btn-export-pdf:hover:not(:disabled) {
+  background: #92400e;
+}
+
+.export-hint {
+  margin: 0;
+}
+
 @media (min-width: 768px) {
   .summary-card {
     padding: 1rem;

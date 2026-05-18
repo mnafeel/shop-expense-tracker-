@@ -11,6 +11,7 @@ import {
 } from "./deviceSync";
 import { isCloudSyncAvailable } from "./firebase";
 import { SyncPanel, type SyncStatus } from "./SyncPanel";
+import { ExportPanel } from "./ExportPanel";
 
 type Screen = "home" | "edit" | "editLabour";
 type Tab = "items" | "labour";
@@ -344,6 +345,8 @@ export default function App() {
           <div className="value">{formatCurrency(grandTotal)}</div>
         </div>
       </section>
+
+      <ExportPanel data={data} />
 
       <div className="main-forms">
         <section className="card">
