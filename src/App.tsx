@@ -11,7 +11,13 @@ import {
 } from "./deviceSync";
 import { isCloudSyncAvailable } from "./firebase";
 import { SyncPanel, type SyncStatus } from "./SyncPanel";
-import { ExportPanel } from "./ExportPanel";
+import { PdfDownloadButton } from "./PdfDownloadButton";
+import {
+  computeDashboardTotals,
+  downloadDashboardPdf,
+  downloadItemsPdf,
+  downloadLabourPdf,
+} from "./export";
 
 type Screen = "home" | "edit" | "editLabour";
 type Tab = "items" | "labour";
@@ -168,8 +174,11 @@ export default function App() {
     [data.labour]
   );
   const grandTotal = itemsTotal + labourTotal;
+  const dashboardTotals = useMemo(() => computeDashboardTotals(data), [data]);
   const draftTotal = draftItems.reduce((s, i) => s + i.price, 0);
   const shopLocked = draftItems.length > 0;
+  const hasAnyData =
+    data.itemBills.length > 0 || data.labour.length > 0;
 
   const openEdit = (billId: string) => {
     setEditingBillId(billId);
@@ -320,14 +329,22 @@ export default function App() {
             <h1>Shop Expense Tracker</h1>
             <p>Add items &amp; labour · auto-saves to cloud database</p>
           </div>
-          <SyncPanel
-            syncStatus={syncStatus}
-            syncError={syncError}
-            onCodeChange={() => {
-              setSyncError("");
-              setSyncKey((k) => k + 1);
-            }}
-          />
+          <div className="header-actions">
+            <PdfDownloadButton
+              variant="header"
+              label="Download full PDF report"
+              disabled={!hasAnyData}
+              onClick={() => downloadDashboardPdf(data, dashboardTotals)}
+            />
+            <SyncPanel
+              syncStatus={syncStatus}
+              syncError={syncError}
+              onCodeChange={() => {
+                setSyncError("");
+                setSyncKey((k) => k + 1);
+              }}
+            />
+          </div>
         </div>
       </header>
 
@@ -345,8 +362,6 @@ export default function App() {
           <div className="value">{formatCurrency(grandTotal)}</div>
         </div>
       </section>
-
-      <ExportPanel data={data} />
 
       <div className="main-forms">
         <section className="card">
@@ -518,7 +533,15 @@ export default function App() {
         >
           <div className="card-header">
             <h2>Saved Items Billing</h2>
-            <span className="badge">{formatCurrency(itemsTotal)}</span>
+            <div className="card-header-end">
+              <span className="badge">{formatCurrency(itemsTotal)}</span>
+              <PdfDownloadButton
+                variant="items"
+                label="Download items billing PDF"
+                disabled={data.itemBills.length === 0}
+                onClick={() => downloadItemsPdf(data, itemsTotal)}
+              />
+            </div>
           </div>
           <div className="card-body bills-body">
             {data.itemBills.length === 0 ? (
@@ -546,15 +569,23 @@ export default function App() {
         >
           <div className="card-header">
             <h2>Labour Billing</h2>
-            <span
-              className="badge"
-              style={{
-                background: "var(--labour-light)",
-                color: "var(--labour)",
-              }}
-            >
-              {formatCurrency(labourTotal)}
-            </span>
+            <div className="card-header-end">
+              <span
+                className="badge"
+                style={{
+                  background: "var(--labour-light)",
+                  color: "var(--labour)",
+                }}
+              >
+                {formatCurrency(labourTotal)}
+              </span>
+              <PdfDownloadButton
+                variant="labour"
+                label="Download labour billing PDF"
+                disabled={data.labour.length === 0}
+                onClick={() => downloadLabourPdf(data, labourTotal)}
+              />
+            </div>
           </div>
           <div className="card-body">
             {data.labour.length === 0 ? (

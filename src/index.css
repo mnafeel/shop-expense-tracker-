@@ -281,81 +281,66 @@ textarea {
   margin-top: 0.15rem;
 }
 
-/* Export / download */
-.export-panel {
-  margin-bottom: 1.25rem;
-}
-
-.export-panel .card-body {
+/* Header actions (cloud + PDF) */
+.header-actions {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.export-desc {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  line-height: 1.45;
-}
-
-.export-badge {
-  background: var(--accent-light);
-  color: #b45309;
-}
-
-.export-actions {
-  display: grid;
-  grid-template-columns: 1fr;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 0.5rem;
 }
 
-@media (min-width: 480px) {
-  .export-actions {
-    grid-template-columns: repeat(3, 1fr);
-  }
+.card-header-end {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
-.btn-export {
-  width: 100%;
-  padding: 0.7rem 1rem;
-  font-weight: 600;
-  font-size: 0.9rem;
+.pdf-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
   border-radius: var(--radius-sm);
-  color: white;
-  border: none;
+  border: 1.5px solid transparent;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
 }
 
-.btn-export:disabled {
-  opacity: 0.45;
+.pdf-download-btn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-.btn-export-json {
-  background: #334155;
+.pdf-download-btn--header {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.35);
 }
 
-.btn-export-json:hover:not(:disabled) {
-  background: #1e293b;
+.pdf-download-btn--header:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.32);
 }
 
-.btn-export-csv {
-  background: #0369a1;
+.pdf-download-btn--items {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: rgba(15, 118, 110, 0.25);
 }
 
-.btn-export-csv:hover:not(:disabled) {
-  background: #075985;
+.pdf-download-btn--items:hover:not(:disabled) {
+  background: #99f6e4;
 }
 
-.btn-export-pdf {
-  background: #b45309;
+.pdf-download-btn--labour {
+  background: var(--labour-light);
+  color: var(--labour);
+  border-color: rgba(124, 58, 237, 0.25);
 }
 
-.btn-export-pdf:hover:not(:disabled) {
-  background: #92400e;
-}
-
-.export-hint {
-  margin: 0;
+.pdf-download-btn--labour:hover:not(:disabled) {
+  background: #ddd6fe;
 }
 
 @media (min-width: 768px) {
