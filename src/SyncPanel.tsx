@@ -90,10 +90,53 @@ export function SyncPanel({
             </div>
             <div className="card-body form-grid">
               {!cloudOk ? (
-                <p className="hint sync-error">
-                  Cloud sync is not configured for this app build. Add Firebase
-                  keys to enable automatic sync across devices.
-                </p>
+                <div className="firebase-setup">
+                  <p className="hint sync-error">
+                    Firebase is not connected yet. Complete these steps once:
+                  </p>
+                  <ol className="hint setup-steps">
+                    <li>
+                      Open{" "}
+                      <a
+                        href="https://console.firebase.google.com"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Firebase Console
+                      </a>{" "}
+                      → Create project (e.g. <code>shop-expense-tracker</code>)
+                    </li>
+                    <li>
+                      <strong>Build → Firestore Database</strong> → Create
+                      database (start in test mode)
+                    </li>
+                    <li>
+                      <strong>Rules</strong> tab → paste rules from{" "}
+                      <code>firestore.rules</code> in your GitHub repo →
+                      Publish
+                    </li>
+                    <li>
+                      <strong>Project settings → Your apps → Web (&lt;/&gt;)</strong>{" "}
+                      → register app → copy the config values
+                    </li>
+                    <li>
+                      GitHub repo → <strong>Settings → Secrets → Actions</strong>{" "}
+                      → add all 6 <code>VITE_FIREBASE_*</code> secrets
+                    </li>
+                    <li>
+                      Firebase → <strong>Authentication → Settings</strong> →
+                      Authorized domains → add <code>mnafeel.github.io</code>
+                    </li>
+                    <li>
+                      Re-run deploy (push to <code>main</code> or Actions →
+                      Run workflow)
+                    </li>
+                  </ol>
+                  <p className="hint">
+                    After deploy, refresh this page → <strong>Set up sync</strong>{" "}
+                    → create a code → use the same code on every device.
+                  </p>
+                </div>
               ) : (
                 <>
                   <p className="hint">
