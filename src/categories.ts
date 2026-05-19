@@ -89,6 +89,31 @@ export function normalizeSettings(raw: unknown): AppSettings {
   };
 }
 
+/** Keep categories from both devices when cloud data merges. */
+export function mergeSettings(local: AppSettings, remote: unknown): AppSettings {
+  const normalized = normalizeSettings(remote);
+  return {
+    itemCategories: mergeCategoryLists(
+      local.itemCategories,
+      normalized.itemCategories
+    ),
+    labourCategories: mergeCategoryLists(
+      local.labourCategories,
+      normalized.labourCategories
+    ),
+  };
+}
+
+function mergeCategoryLists(a: Category[], b: Category[]): Category[] {
+  const byId = new Map<string, Category>();
+  for (const c of a) byId.set(c.id, c);
+  for (const c of b) byId.set(c.id, c);
+  return Array.from(byId.values()).sort(
+    (x, y) =>
+      new Date(x.createdAt).getTime() - new Date(y.createdAt).getTime()
+  );
+}
+
 function normalizeCategoryList(raw: unknown): Category[] {
   if (!Array.isArray(raw)) return [];
   return raw

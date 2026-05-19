@@ -10,6 +10,7 @@ import {
   computeItemCategoryTotals,
   computeLabourCategoryTotals,
   getCategoryName,
+  mergeSettings,
 } from "./categories";
 import { CategorySelect } from "./CategorySelect";
 import { CategoryTotalsBlock } from "./CategoryTotalsBlock";
@@ -107,7 +108,10 @@ export default function App() {
             normalizeAppData({
               itemBills: remote.itemBills,
               labour: remote.labour,
-              settings: remote.settings,
+              settings: mergeSettings(
+                dataRef.current.settings,
+                remote.settings
+              ),
             })
           );
         } else {
@@ -139,11 +143,11 @@ export default function App() {
         if (remote.updatedAt <= lastRemoteAt.current) return;
         lastRemoteAt.current = remote.updatedAt;
         skipCloudPush.current = true;
-        setData(
+        setData((current) =>
           normalizeAppData({
             itemBills: remote.itemBills,
             labour: remote.labour,
-            settings: remote.settings,
+            settings: mergeSettings(current.settings, remote.settings),
           })
         );
         setSyncStatus("synced");
@@ -220,11 +224,13 @@ export default function App() {
   };
 
   const openEdit = (billId: string) => {
+    setEditingLabourId(null);
     setEditingBillId(billId);
     setScreen("edit");
   };
 
   const openLabourEdit = (labourId: string) => {
+    setEditingBillId(null);
     setEditingLabourId(labourId);
     setScreen("editLabour");
   };
@@ -534,11 +540,10 @@ export default function App() {
                       </tr>
                     ))}
                     <tr className="total-row">
-                      <td>Total</td>
+                      <td colSpan={3}>Total</td>
                       <td className="price-cell">
                         <strong>{formatCurrency(draftTotal)}</strong>
                       </td>
-                      <td></td>
                     </tr>
                   </tbody>
                 </table>
@@ -898,8 +903,18 @@ function EditScreen({
   const [editName, setEditName] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
+  const [editError, setEditError] = useState("");
 
   const total = items.reduce((s, i) => s + i.price, 0);
+  const needsCategory = itemCategories.length > 0;
+  const canSaveInlineEdit =
+    !needsCategory ||
+    (!!editCategoryId &&
+      editName.trim() &&
+      !isNaN(parseFloat(editPrice)) &&
+      parseFloat(editPrice) >= 0);
+  const allItemsCategorized =
+    !needsCategory || items.every((i) => !!i.categoryId);
 
   const addItem = () => {
     const name = itemName.trim();
@@ -924,14 +939,21 @@ function EditScreen({
     setEditName(item.itemName);
     setEditPrice(String(item.price));
     setEditCategoryId(item.categoryId);
+    setEditError("");
   };
 
   const saveEdit = () => {
     if (!editingId) return;
     const name = editName.trim();
     const price = parseFloat(editPrice);
-    if (!name || isNaN(price) || price < 0) return;
-    if (itemCategories.length > 0 && !editCategoryId) return;
+    if (!name || isNaN(price) || price < 0) {
+      setEditError("Enter a valid item name and price.");
+      return;
+    }
+    if (needsCategory && !editCategoryId) {
+      setEditError("Select a category for this item.");
+      return;
+    }
     setItems((list) =>
       list.map((i) =>
         i.id === editingId
@@ -940,11 +962,13 @@ function EditScreen({
       )
     );
     setEditingId(null);
+    setEditError("");
   };
 
   const handleSave = () => {
     const shop = shopName.trim();
     if (!shop || items.length === 0) return;
+    if (!allItemsCategorized) return;
     onSave({
       ...bill,
       shopName: shop,
@@ -1009,18 +1033,25 @@ function EditScreen({
                             onChange={(e) => setEditPrice(e.target.value)}
                             placeholder="Price"
                           />
+                          {editError && (
+                            <p className="hint sync-error">{editError}</p>
+                          )}
                           <div className="edit-actions inline">
                             <button
                               type="button"
                               className="btn btn-primary btn-sm"
                               onClick={saveEdit}
+                              disabled={!canSaveInlineEdit}
                             >
                               Save
                             </button>
                             <button
                               type="button"
                               className="btn btn-secondary btn-sm"
-                              onClick={() => setEditingId(null)}
+                              onClick={() => {
+                                setEditingId(null);
+                                setEditError("");
+                              }}
                             >
                               Cancel
                             </button>
@@ -1092,17 +1123,35 @@ function EditScreen({
                 placeholder="₹ Price"
               />
             </div>
-            <button type="button" className="btn btn-secondary" onClick={addItem}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={addItem}
+              disabled={
+                !itemName.trim() ||
+                isNaN(parseFloat(itemPrice)) ||
+                parseFloat(itemPrice) < 0 ||
+                (needsCategory && !itemCategoryId)
+              }
+            >
               Add
             </button>
           </div>
+
+          {!allItemsCategorized && (
+            <p className="hint sync-error">
+              Each item needs a category. Tap Edit on rows marked Uncategorized.
+            </p>
+          )}
 
           <div className="screen-actions">
             <button
               type="button"
               className="btn btn-primary btn-large"
               onClick={handleSave}
-              disabled={!shopName.trim() || items.length === 0}
+              disabled={
+                !shopName.trim() || items.length === 0 || !allItemsCategorized
+              }
             >
               Save changes
             </button>
