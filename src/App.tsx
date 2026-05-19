@@ -56,6 +56,8 @@ export default function App() {
   const [itemPrice, setItemPrice] = useState("");
   const [itemCategoryId, setItemCategoryId] = useState("");
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
+  const [draftEditId, setDraftEditId] = useState<string | null>(null);
+  const [draftEditCategoryId, setDraftEditCategoryId] = useState("");
 
   const [labourDesc, setLabourDesc] = useState("");
   const [labourAmount, setLabourAmount] = useState("");
@@ -208,6 +210,7 @@ export default function App() {
   const dashboardTotals = useMemo(() => computeDashboardTotals(data), [data]);
   const draftTotal = draftItems.reduce((s, i) => s + i.price, 0);
   const shopLocked = draftItems.length > 0;
+  const categoryLocked = draftItems.length > 0;
   const hasAnyData =
     data.itemBills.length > 0 || data.labour.length > 0;
   const itemCategoryTotals = useMemo(
@@ -270,6 +273,27 @@ export default function App() {
 
   const removeDraftItem = (id: string) => {
     setDraftItems((list) => list.filter((i) => i.id !== id));
+    if (draftEditId === id) {
+      setDraftEditId(null);
+      setDraftEditCategoryId("");
+    }
+  };
+
+  const startDraftCategoryEdit = (row: DraftItem) => {
+    setDraftEditId(row.id);
+    setDraftEditCategoryId(row.categoryId);
+  };
+
+  const saveDraftCategoryEdit = () => {
+    if (!draftEditId) return;
+    if (itemCats.length > 0 && !draftEditCategoryId) return;
+    setDraftItems((list) =>
+      list.map((i) =>
+        i.id === draftEditId ? { ...i, categoryId: draftEditCategoryId } : i
+      )
+    );
+    setDraftEditId(null);
+    setDraftEditCategoryId("");
   };
 
   const saveShopBill = () => {
@@ -294,7 +318,9 @@ export default function App() {
     setShopName("");
     setItemName("");
     setItemPrice("");
+    setItemCategoryId("");
     setDraftItems([]);
+    setDraftEditId(null);
     setActiveTab("items");
   };
 
@@ -463,15 +489,18 @@ export default function App() {
 
             <CategorySelect
               id="itemCategory"
-              label="Category"
+              label="Main category"
               value={itemCategoryId}
               categories={itemCats}
               onChange={setItemCategoryId}
-              required={itemCats.length > 0}
+              required={itemCats.length > 0 && !categoryLocked}
+              disabled={categoryLocked}
               hint={
                 itemCats.length === 0
                   ? "Open Settings (gear icon) to add item categories."
-                  : undefined
+                  : categoryLocked
+                    ? "Main category applies to all new items. Tap Edit on a row to change one item only."
+                    : "Pick once — every item you add will use this category."
               }
             />
 
@@ -516,29 +545,74 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {draftItems.map((row) => (
-                      <tr key={row.id}>
-                        <td>
-                          {getCategoryName(
-                            row.categoryId,
-                            data.settings.itemCategories
-                          )}
-                        </td>
-                        <td>{row.itemName}</td>
-                        <td className="price-cell">
-                          {formatCurrency(row.price)}
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="btn-ghost btn-xs"
-                            onClick={() => removeDraftItem(row.id)}
-                          >
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {draftItems.map((row) =>
+                      draftEditId === row.id ? (
+                        <tr key={row.id} className="editing-row">
+                          <td colSpan={4}>
+                            <div className="edit-inline-form draft-category-edit">
+                              <CategorySelect
+                                id={`draft-cat-${row.id}`}
+                                label="Change category for this item"
+                                value={draftEditCategoryId}
+                                categories={itemCats}
+                                onChange={setDraftEditCategoryId}
+                                required={itemCats.length > 0}
+                              />
+                              <div className="edit-actions inline">
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-sm"
+                                  onClick={saveDraftCategoryEdit}
+                                  disabled={
+                                    itemCats.length > 0 && !draftEditCategoryId
+                                  }
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => setDraftEditId(null)}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={row.id}>
+                          <td>
+                            {getCategoryName(
+                              row.categoryId,
+                              data.settings.itemCategories
+                            )}
+                          </td>
+                          <td>{row.itemName}</td>
+                          <td className="price-cell">
+                            {formatCurrency(row.price)}
+                          </td>
+                          <td className="actions-cell">
+                            {itemCats.length > 0 && (
+                              <button
+                                type="button"
+                                className="btn-edit btn-xs"
+                                onClick={() => startDraftCategoryEdit(row)}
+                              >
+                                Edit
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="btn-ghost btn-xs"
+                              onClick={() => removeDraftItem(row.id)}
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    )}
                     <tr className="total-row">
                       <td colSpan={3}>Total</td>
                       <td className="price-cell">
@@ -898,7 +972,9 @@ function EditScreen({
   const [items, setItems] = useState<BillItem[]>(bill.items);
   const [itemName, setItemName] = useState("");
   const [itemPrice, setItemPrice] = useState("");
-  const [itemCategoryId, setItemCategoryId] = useState("");
+  const [itemCategoryId, setItemCategoryId] = useState(
+    () => bill.items.find((i) => i.categoryId)?.categoryId ?? ""
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editPrice, setEditPrice] = useState("");
@@ -915,12 +991,14 @@ function EditScreen({
       parseFloat(editPrice) >= 0);
   const allItemsCategorized =
     !needsCategory || items.every((i) => !!i.categoryId);
+  const categoryLocked =
+    items.length > 0 && (!needsCategory || !!itemCategoryId);
 
   const addItem = () => {
     const name = itemName.trim();
     const price = parseFloat(itemPrice);
     if (!name || isNaN(price) || price < 0) return;
-    if (itemCategories.length > 0 && !itemCategoryId) return;
+    if (needsCategory && !itemCategoryId) return;
     setItems((list) => [
       ...list,
       {
@@ -1099,11 +1177,19 @@ function EditScreen({
 
           <CategorySelect
             id="editNewItemCategory"
-            label="Category"
+            label="Main category"
             value={itemCategoryId}
             categories={itemCategories}
             onChange={setItemCategoryId}
-            required={itemCategories.length > 0}
+            required={itemCategories.length > 0 && !categoryLocked}
+            disabled={categoryLocked}
+            hint={
+              itemCategories.length === 0
+                ? undefined
+                : categoryLocked
+                  ? "Main category applies to new items. Tap Edit on a row to change one item only."
+                  : "Pick main category before adding items."
+            }
           />
 
           <div className="item-entry-block">
@@ -1140,7 +1226,7 @@ function EditScreen({
 
           {!allItemsCategorized && (
             <p className="hint sync-error">
-              Each item needs a category. Tap Edit on rows marked Uncategorized.
+              Each item needs a category. Tap Edit on a row to set or change it.
             </p>
           )}
 

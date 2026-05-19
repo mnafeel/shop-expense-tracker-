@@ -8,6 +8,7 @@ export function CategorySelect({
   onChange,
   required,
   hint,
+  disabled: disabledProp,
 }: {
   id: string;
   label: string;
@@ -16,7 +17,10 @@ export function CategorySelect({
   onChange: (categoryId: string) => void;
   required?: boolean;
   hint?: string;
+  disabled?: boolean;
 }) {
+  const disabled = disabledProp || categories.length === 0;
+
   return (
     <div>
       <label htmlFor={id}>{label}</label>
@@ -25,7 +29,7 @@ export function CategorySelect({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
-        disabled={categories.length === 0}
+        disabled={disabled}
       >
         <option value="">
           {categories.length === 0
