@@ -430,6 +430,7 @@ export default function App() {
       {settingsOpen && (
         <SettingsModal
           settings={data.settings}
+          data={data}
           onClose={() => setSettingsOpen(false)}
           onChange={updateSettings}
         />

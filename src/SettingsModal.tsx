@@ -1,7 +1,17 @@
-import { useState } from "react";
-import type { AppSettings, Category } from "./types";
-import { createCategory } from "./categories";
-import { formatDateTime } from "./utils";
+import { useMemo, useState } from "react";
+import type { AppData, AppSettings, Category } from "./types";
+import { createCategory, computeItemCategoryTotals, computeLabourCategoryTotals } from "./categories";
+import { CategoryTotalsBlock } from "./CategoryTotalsBlock";
+import {
+  computeDashboardTotals,
+  downloadCategoryTotalsPdf,
+  downloadDashboardPdf,
+  downloadItemsPdf,
+  downloadLabourPdf,
+} from "./export";
+import { billTotal } from "./storage";
+import { formatCurrency, formatDateTime } from "./utils";
+import { PdfDownloadButton } from "./PdfDownloadButton";
 
 export function SettingsFab({ onClick }: { onClick: () => void }) {
   return (
@@ -10,7 +20,7 @@ export function SettingsFab({ onClick }: { onClick: () => void }) {
       className="settings-fab"
       onClick={onClick}
       aria-label="Open settings"
-      title="Settings — manage categories"
+      title="Settings — categories, totals & PDF"
     >
       <SettingsIcon />
     </button>
@@ -19,15 +29,37 @@ export function SettingsFab({ onClick }: { onClick: () => void }) {
 
 export function SettingsModal({
   settings,
+  data,
   onClose,
   onChange,
 }: {
   settings: AppSettings;
+  data: AppData;
   onClose: () => void;
   onChange: (settings: AppSettings) => void;
 }) {
   const [itemName, setItemName] = useState("");
   const [labourName, setLabourName] = useState("");
+
+  const itemsTotal = useMemo(
+    () => data.itemBills.reduce((s, b) => s + billTotal(b), 0),
+    [data.itemBills]
+  );
+  const labourTotal = useMemo(
+    () => data.labour.reduce((s, l) => s + l.amount, 0),
+    [data.labour]
+  );
+  const grandTotal = itemsTotal + labourTotal;
+  const hasAnyData = data.itemBills.length > 0 || data.labour.length > 0;
+  const dashboardTotals = useMemo(() => computeDashboardTotals(data), [data]);
+  const itemCategoryTotals = useMemo(
+    () => computeItemCategoryTotals(data),
+    [data]
+  );
+  const labourCategoryTotals = useMemo(
+    () => computeLabourCategoryTotals(data),
+    [data]
+  );
 
   const addItemCategory = () => {
     const name = itemName.trim();
@@ -98,9 +130,83 @@ export function SettingsModal({
         </div>
         <div className="card-body settings-body">
           <p className="hint settings-intro">
-            Add category names here. They appear in dropdowns when you add items
-            or labour. Reports show each category total, then the full total.
+            Manage categories, view full category-wise totals, and download
+            PDF reports.
           </p>
+
+          <div className="settings-section settings-reports">
+            <h3>Full category totals</h3>
+            <p className="hint">
+              Totals from all saved items and labour in your database.
+            </p>
+            {hasAnyData ? (
+              <>
+                <CategoryTotalsBlock
+                  title="Items by category"
+                  rows={itemCategoryTotals}
+                  fullTotal={itemsTotal}
+                />
+                <CategoryTotalsBlock
+                  title="Labour by category"
+                  rows={labourCategoryTotals}
+                  fullTotal={labourTotal}
+                />
+                <div className="settings-grand-total">
+                  <span>Grand total (items + labour)</span>
+                  <strong>{formatCurrency(grandTotal)}</strong>
+                </div>
+              </>
+            ) : (
+              <p className="hint settings-empty">
+                No data yet. Add items or labour to see category totals.
+              </p>
+            )}
+          </div>
+
+          <div className="settings-section settings-pdf-section">
+            <h3>Download PDF</h3>
+            <p className="hint">All report types — saved to your device.</p>
+            <ul className="settings-pdf-list">
+              <li>
+                <SettingsPdfRow
+                  label="Full report"
+                  detail="Items, labour, details & totals"
+                  variant="header"
+                  disabled={!hasAnyData}
+                  onClick={() => downloadDashboardPdf(data, dashboardTotals)}
+                />
+              </li>
+              <li>
+                <SettingsPdfRow
+                  label="Category totals"
+                  detail="Category-wise totals only"
+                  variant="items"
+                  disabled={!hasAnyData}
+                  onClick={() =>
+                    downloadCategoryTotalsPdf(data, dashboardTotals)
+                  }
+                />
+              </li>
+              <li>
+                <SettingsPdfRow
+                  label="Items billing"
+                  detail="Shop bills & item lines"
+                  variant="items"
+                  disabled={data.itemBills.length === 0}
+                  onClick={() => downloadItemsPdf(data, itemsTotal)}
+                />
+              </li>
+              <li>
+                <SettingsPdfRow
+                  label="Labour billing"
+                  detail="All labour entries"
+                  variant="labour"
+                  disabled={data.labour.length === 0}
+                  onClick={() => downloadLabourPdf(data, labourTotal)}
+                />
+              </li>
+            </ul>
+          </div>
 
           <CategorySection
             title="Item categories"
@@ -125,6 +231,35 @@ export function SettingsModal({
           />
         </div>
       </section>
+    </div>
+  );
+}
+
+function SettingsPdfRow({
+  label,
+  detail,
+  variant,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  detail: string;
+  variant: "header" | "items" | "labour";
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="settings-pdf-row">
+      <div className="settings-pdf-row-text">
+        <strong>{label}</strong>
+        <span className="hint">{detail}</span>
+      </div>
+      <PdfDownloadButton
+        variant={variant}
+        label={`Download ${label} PDF`}
+        disabled={disabled}
+        onClick={onClick}
+      />
     </div>
   );
 }

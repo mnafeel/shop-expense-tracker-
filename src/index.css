@@ -1361,9 +1361,68 @@ label {
 }
 
 .settings-modal {
-  width: min(480px, 100%);
-  max-height: min(90dvh, 640px);
+  width: min(520px, 100%);
+  max-height: min(92dvh, 720px);
   overflow-y: auto;
+}
+
+.settings-reports .category-totals {
+  margin-bottom: 0.75rem;
+}
+
+.settings-reports .category-totals:last-of-type {
+  margin-bottom: 0;
+}
+
+.settings-grand-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--primary);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+}
+
+.settings-grand-total strong {
+  font-size: 1.15rem;
+}
+
+.settings-pdf-list {
+  list-style: none;
+  margin-top: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.settings-pdf-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.settings-pdf-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.settings-pdf-row-text strong {
+  font-size: 0.9rem;
+}
+
+.settings-pdf-row-text .hint {
+  font-size: 0.72rem;
 }
 
 .settings-body {

@@ -150,6 +150,71 @@ export function downloadItemsPdf(data: AppData, itemsTotal: number) {
   doc.save(`items-billing-${dateStamp()}.pdf`);
 }
 
+/** Category-wise totals only (items + labour + grand). */
+export function downloadCategoryTotalsPdf(
+  data: AppData,
+  totals: DashboardTotals
+) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const margin = 14;
+
+  let y = writeReportHeader(
+    doc,
+    margin,
+    "Category Totals Report"
+  );
+
+  autoTable(doc, {
+    startY: y + 4,
+    margin: { left: margin, right: margin },
+    head: [["Summary", "Amount"]],
+    body: [
+      ["Items total", rs(totals.itemsTotal)],
+      ["Labour total", rs(totals.labourTotal)],
+      ["Grand total", rs(totals.grandTotal)],
+    ],
+    theme: "grid",
+    headStyles: { fillColor: [15, 23, 42], fontSize: 10 },
+    styles: { fontSize: 10, cellPadding: 2.5 },
+    columnStyles: { 1: { halign: "right" } },
+    didParseCell: (data) => {
+      if (data.section === "body" && data.row.index === 2) {
+        data.cell.styles.fontStyle = "bold";
+      }
+    },
+  });
+
+  y = getLastTableY(doc) + 12;
+  y = writeCategoryTotalsSection(
+    doc,
+    margin,
+    y,
+    "Items by category",
+    computeItemCategoryTotals(data),
+    totals.itemsTotal,
+    [15, 118, 110]
+  );
+  y += 10;
+
+  if (y > doc.internal.pageSize.getHeight() - 50) {
+    doc.addPage();
+    y = 18;
+  }
+
+  writeCategoryTotalsSection(
+    doc,
+    margin,
+    y,
+    "Labour by category",
+    computeLabourCategoryTotals(data),
+    totals.labourTotal,
+    [124, 58, 237]
+  );
+
+  addPageNumbers(doc);
+  doc.save(`category-totals-${dateStamp()}.pdf`);
+}
+
 /** Labour billing only PDF. */
 export function downloadLabourPdf(data: AppData, labourTotal: number) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
