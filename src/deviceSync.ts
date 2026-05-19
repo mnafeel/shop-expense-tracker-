@@ -1,5 +1,6 @@
 import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import type { AppData } from "./types";
+import { normalizeAppData } from "./storage";
 import { getFirestoreDb, isCloudSyncAvailable } from "./firebase";
 
 const SYNC_CODE_KEY = "shop-expense-sync-code";
@@ -49,8 +50,11 @@ export function subscribeCloudData(
       if (!snap.exists()) return;
       const raw = snap.data() as CloudPayload;
       onUpdate({
-        itemBills: raw.itemBills ?? [],
-        labour: raw.labour ?? [],
+        ...normalizeAppData({
+          itemBills: raw.itemBills ?? [],
+          labour: raw.labour ?? [],
+          settings: raw.settings,
+        }),
         updatedAt: raw.updatedAt ?? 0,
       });
     },
@@ -69,6 +73,7 @@ export async function pushCloudData(
   const payload: CloudPayload = {
     itemBills: data.itemBills,
     labour: data.labour,
+    settings: data.settings,
     updatedAt: Date.now(),
   };
 
@@ -94,8 +99,11 @@ export async function fetchCloudData(
   if (!snap.exists()) return null;
   const raw = snap.data() as CloudPayload;
   return {
-    itemBills: raw.itemBills ?? [],
-    labour: raw.labour ?? [],
+    ...normalizeAppData({
+      itemBills: raw.itemBills ?? [],
+      labour: raw.labour ?? [],
+      settings: raw.settings,
+    }),
     updatedAt: raw.updatedAt ?? 0,
   };
 }

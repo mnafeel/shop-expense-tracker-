@@ -1,4 +1,5 @@
 import type { AppData, BillItem, ItemBill } from "./types";
+import { defaultSettings, normalizeSettings } from "./categories";
 import { createId } from "./ids";
 
 const LEGACY_STORAGE_KEY = "shop-expense-tracker";
@@ -6,6 +7,7 @@ const LEGACY_STORAGE_KEY = "shop-expense-tracker";
 export const defaultData: AppData = {
   itemBills: [],
   labour: [],
+  settings: { ...defaultSettings },
 };
 
 function normalizeBillItem(raw: Record<string, unknown>): BillItem {
@@ -13,6 +15,7 @@ function normalizeBillItem(raw: Record<string, unknown>): BillItem {
     id: String(raw.id ?? createId()),
     itemName: String(raw.itemName ?? raw.name ?? ""),
     price: Number(raw.price) || 0,
+    categoryId: String(raw.categoryId ?? ""),
   };
 }
 
@@ -48,20 +51,34 @@ function normalizeItemBill(raw: Record<string, unknown>): ItemBill {
   };
 }
 
+function normalizeLabour(raw: Record<string, unknown>): AppData["labour"][0] {
+  return {
+    id: String(raw.id ?? createId()),
+    description: String(raw.description ?? ""),
+    amount: Number(raw.amount) || 0,
+    addedAt: String(raw.addedAt ?? new Date().toISOString()),
+    categoryId: String(raw.categoryId ?? ""),
+  };
+}
+
 function migrateLegacy(parsed: Record<string, unknown>): AppData {
-  const labour = (parsed.labour as AppData["labour"]) ?? [];
+  const labour = Array.isArray(parsed.labour)
+    ? (parsed.labour as Record<string, unknown>[]).map(normalizeLabour)
+    : [];
   const rawBills = parsed.itemBills ?? parsed.bills;
 
+  let itemBills: ItemBill[] = [];
   if (Array.isArray(rawBills)) {
-    return {
-      itemBills: rawBills.map((b) =>
-        normalizeItemBill(b as Record<string, unknown>)
-      ),
-      labour,
-    };
+    itemBills = rawBills.map((b) =>
+      normalizeItemBill(b as Record<string, unknown>)
+    );
   }
 
-  return { itemBills: [], labour: [] };
+  return {
+    itemBills,
+    labour,
+    settings: normalizeSettings(parsed.settings),
+  };
 }
 
 /** One-time read of browser local backup; removes the key after read. */
@@ -79,4 +96,16 @@ export function consumeLegacyLocalBackup(): AppData | null {
 
 export function billTotal(bill: ItemBill): number {
   return bill.items.reduce((s, i) => s + i.price, 0);
+}
+
+export function normalizeAppData(raw: Partial<AppData>): AppData {
+  return {
+    itemBills: (raw.itemBills ?? []).map((b) =>
+      normalizeItemBill(b as unknown as Record<string, unknown>)
+    ),
+    labour: (raw.labour ?? []).map((l) =>
+      normalizeLabour(l as unknown as Record<string, unknown>)
+    ),
+    settings: normalizeSettings(raw.settings),
+  };
 }

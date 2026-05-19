@@ -1,6 +1,11 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { AppData } from "./types";
+import {
+  computeItemCategoryTotals,
+  computeLabourCategoryTotals,
+  getCategoryName,
+} from "./categories";
 import { billTotal } from "./storage";
 import { formatDateTime } from "./utils";
 
@@ -70,7 +75,18 @@ export function downloadDashboardPdf(data: AppData, totals: DashboardTotals) {
 
   y = writeDashboardSummaryTable(doc, margin, y, totals) + 12;
 
-  y = writeItemsSection(doc, margin, y, data.itemBills);
+  y = writeCategoryTotalsSection(
+    doc,
+    margin,
+    y,
+    "Items by category",
+    computeItemCategoryTotals(data),
+    totals.itemsTotal,
+    [15, 118, 110]
+  );
+  y += 8;
+
+  y = writeItemsSection(doc, margin, y, data);
   y += 12;
 
   if (y > doc.internal.pageSize.getHeight() - 40) {
@@ -78,7 +94,18 @@ export function downloadDashboardPdf(data: AppData, totals: DashboardTotals) {
     y = 18;
   }
 
-  writeLabourSection(doc, margin, y, data.labour);
+  y = writeCategoryTotalsSection(
+    doc,
+    margin,
+    y,
+    "Labour by category",
+    computeLabourCategoryTotals(data),
+    totals.labourTotal,
+    [124, 58, 237]
+  );
+  y += 8;
+
+  writeLabourSection(doc, margin, y, data);
   addPageNumbers(doc);
   doc.save(`shop-expense-full-report-${dateStamp()}.pdf`);
 }
@@ -108,7 +135,17 @@ export function downloadItemsPdf(data: AppData, itemsTotal: number) {
   });
 
   y = getLastTableY(doc) + 12;
-  writeItemsSection(doc, margin, y, data.itemBills);
+  y = writeCategoryTotalsSection(
+    doc,
+    margin,
+    y,
+    "Category totals",
+    computeItemCategoryTotals(data),
+    itemsTotal,
+    [15, 118, 110]
+  );
+  y += 8;
+  writeItemsSection(doc, margin, y, data);
   addPageNumbers(doc);
   doc.save(`items-billing-${dateStamp()}.pdf`);
 }
@@ -135,9 +172,61 @@ export function downloadLabourPdf(data: AppData, labourTotal: number) {
   });
 
   y = getLastTableY(doc) + 12;
-  writeLabourSection(doc, margin, y, data.labour);
+  y = writeCategoryTotalsSection(
+    doc,
+    margin,
+    y,
+    "Category totals",
+    computeLabourCategoryTotals(data),
+    labourTotal,
+    [124, 58, 237]
+  );
+  y += 8;
+  writeLabourSection(doc, margin, y, data);
   addPageNumbers(doc);
   doc.save(`labour-billing-${dateStamp()}.pdf`);
+}
+
+function writeCategoryTotalsSection(
+  doc: jsPDF,
+  margin: number,
+  y: number,
+  title: string,
+  rows: ReturnType<typeof computeItemCategoryTotals>,
+  fullTotal: number,
+  fillColor: [number, number, number]
+): number {
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text(title, margin, y);
+
+  const body =
+    rows.length > 0
+      ? rows.map((r) => [r.name, rs(r.total)])
+      : [["—", "No data"]];
+
+  body.push(["Full total", rs(fullTotal)]);
+
+  autoTable(doc, {
+    startY: y + 4,
+    margin: { left: margin, right: margin },
+    head: [["Category", "Total"]],
+    body,
+    theme: "grid",
+    headStyles: { fillColor, fontSize: 9 },
+    styles: { fontSize: 9, cellPadding: 2.5 },
+    columnStyles: { 1: { halign: "right" } },
+    didParseCell: (data) => {
+      if (
+        data.section === "body" &&
+        data.row.index === body.length - 1
+      ) {
+        data.cell.styles.fontStyle = "bold";
+      }
+    },
+  });
+
+  return getLastTableY(doc);
 }
 
 function writeReportHeader(doc: jsPDF, margin: number, title: string): number {
@@ -191,13 +280,13 @@ function writeItemsSection(
   doc: jsPDF,
   margin: number,
   y: number,
-  itemBills: AppData["itemBills"]
+  data: AppData
 ): number {
   doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
-  doc.text("Items Billing", margin, y);
+  doc.text("Items Billing (detail)", margin, y);
 
-  if (itemBills.length === 0) {
+  if (data.itemBills.length === 0) {
     doc.setFontSize(10);
     doc.setFont("helvetica", "italic");
     doc.text("No items billing records.", margin, y + 8);
@@ -205,12 +294,13 @@ function writeItemsSection(
   }
 
   const itemRows: string[][] = [];
-  for (const bill of itemBills) {
+  for (const bill of data.itemBills) {
     const billTotalVal = billTotal(bill);
     const date = formatDateTime(bill.savedAt);
     bill.items.forEach((item, index) => {
       itemRows.push([
         bill.shopName,
+        getCategoryName(item.categoryId, data.settings.itemCategories),
         index === 0 ? date : "",
         item.itemName,
         rs(item.price),
@@ -222,12 +312,12 @@ function writeItemsSection(
   autoTable(doc, {
     startY: y + 4,
     margin: { left: margin, right: margin },
-    head: [["Shop", "Date", "Item", "Price", "Bill total"]],
+    head: [["Shop", "Category", "Date", "Item", "Price", "Bill total"]],
     body: itemRows,
     theme: "striped",
-    headStyles: { fillColor: [15, 118, 110], fontSize: 9 },
-    styles: { fontSize: 8, cellPadding: 2 },
-    columnStyles: { 3: { halign: "right" }, 4: { halign: "right" } },
+    headStyles: { fillColor: [15, 118, 110], fontSize: 8 },
+    styles: { fontSize: 7, cellPadding: 2 },
+    columnStyles: { 4: { halign: "right" }, 5: { halign: "right" } },
   });
 
   return getLastTableY(doc);
@@ -237,13 +327,13 @@ function writeLabourSection(
   doc: jsPDF,
   margin: number,
   y: number,
-  labour: AppData["labour"]
+  data: AppData
 ): number {
   doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
-  doc.text("Labour Billing", margin, y);
+  doc.text("Labour Billing (detail)", margin, y);
 
-  if (labour.length === 0) {
+  if (data.labour.length === 0) {
     doc.setFontSize(10);
     doc.setFont("helvetica", "italic");
     doc.text("No labour entries.", margin, y + 8);
@@ -253,8 +343,9 @@ function writeLabourSection(
   autoTable(doc, {
     startY: y + 4,
     margin: { left: margin, right: margin },
-    head: [["Description", "Date", "Amount"]],
-    body: labour.map((entry) => [
+    head: [["Category", "Description", "Date", "Amount"]],
+    body: data.labour.map((entry) => [
+      getCategoryName(entry.categoryId, data.settings.labourCategories),
       entry.description,
       formatDateTime(entry.addedAt),
       rs(entry.amount),
@@ -262,7 +353,7 @@ function writeLabourSection(
     theme: "striped",
     headStyles: { fillColor: [124, 58, 237], fontSize: 9 },
     styles: { fontSize: 8, cellPadding: 2 },
-    columnStyles: { 2: { halign: "right" } },
+    columnStyles: { 3: { halign: "right" } },
   });
 
   return getLastTableY(doc);

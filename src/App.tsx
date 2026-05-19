@@ -1,6 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppData, BillItem, ItemBill, LabourEntry } from "./types";
-import { billTotal, consumeLegacyLocalBackup, defaultData } from "./storage";
+import {
+  billTotal,
+  consumeLegacyLocalBackup,
+  defaultData,
+  normalizeAppData,
+} from "./storage";
+import {
+  computeItemCategoryTotals,
+  computeLabourCategoryTotals,
+  getCategoryName,
+} from "./categories";
+import { CategorySelect } from "./CategorySelect";
+import { CategoryTotalsBlock } from "./CategoryTotalsBlock";
+import { SettingsFab, SettingsModal } from "./SettingsModal";
 import { createId } from "./ids";
 import { formatCurrency, formatDateTime } from "./utils";
 import {
@@ -22,7 +35,12 @@ import {
 type Screen = "home" | "edit" | "editLabour";
 type Tab = "items" | "labour";
 
-type DraftItem = { id: string; itemName: string; price: number };
+type DraftItem = {
+  id: string;
+  itemName: string;
+  price: number;
+  categoryId: string;
+};
 
 const now = () => new Date().toISOString();
 
@@ -35,10 +53,13 @@ export default function App() {
   const [shopName, setShopName] = useState("");
   const [itemName, setItemName] = useState("");
   const [itemPrice, setItemPrice] = useState("");
+  const [itemCategoryId, setItemCategoryId] = useState("");
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
 
   const [labourDesc, setLabourDesc] = useState("");
   const [labourAmount, setLabourAmount] = useState("");
+  const [labourCategoryId, setLabourCategoryId] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("local");
   const [syncError, setSyncError] = useState("");
   const [cloudReady, setCloudReady] = useState(false);
@@ -82,10 +103,13 @@ export default function App() {
           consumeLegacyLocalBackup();
           lastRemoteAt.current = remote.updatedAt;
           skipCloudPush.current = true;
-          setData({
-            itemBills: remote.itemBills,
-            labour: remote.labour,
-          });
+          setData(
+            normalizeAppData({
+              itemBills: remote.itemBills,
+              labour: remote.labour,
+              settings: remote.settings,
+            })
+          );
         } else {
           const legacy = consumeLegacyLocalBackup();
           const toSync = legacy ?? dataRef.current;
@@ -115,10 +139,13 @@ export default function App() {
         if (remote.updatedAt <= lastRemoteAt.current) return;
         lastRemoteAt.current = remote.updatedAt;
         skipCloudPush.current = true;
-        setData({
-          itemBills: remote.itemBills,
-          labour: remote.labour,
-        });
+        setData(
+          normalizeAppData({
+            itemBills: remote.itemBills,
+            labour: remote.labour,
+            settings: remote.settings,
+          })
+        );
         setSyncStatus("synced");
         setSyncError("");
       },
@@ -179,6 +206,18 @@ export default function App() {
   const shopLocked = draftItems.length > 0;
   const hasAnyData =
     data.itemBills.length > 0 || data.labour.length > 0;
+  const itemCategoryTotals = useMemo(
+    () => computeItemCategoryTotals(data),
+    [data]
+  );
+  const labourCategoryTotals = useMemo(
+    () => computeLabourCategoryTotals(data),
+    [data]
+  );
+
+  const updateSettings = (settings: AppData["settings"]) => {
+    setData((d) => ({ ...d, settings }));
+  };
 
   const openEdit = (billId: string) => {
     setEditingBillId(billId);
@@ -207,8 +246,18 @@ export default function App() {
     const shop = shopName.trim();
     const name = itemName.trim();
     const price = parseFloat(itemPrice);
+    const cats = data.settings.itemCategories;
     if (!shop || !name || isNaN(price) || price < 0) return;
-    setDraftItems((list) => [...list, { id: createId(), itemName: name, price }]);
+    if (cats.length > 0 && !itemCategoryId) return;
+    setDraftItems((list) => [
+      ...list,
+      {
+        id: createId(),
+        itemName: name,
+        price,
+        categoryId: itemCategoryId,
+      },
+    ]);
     setItemName("");
     setItemPrice("");
   };
@@ -231,6 +280,7 @@ export default function App() {
         id: i.id,
         itemName: i.itemName,
         price: i.price,
+        categoryId: i.categoryId,
       })),
     };
 
@@ -242,26 +292,38 @@ export default function App() {
     setActiveTab("items");
   };
 
+  const itemCats = data.settings.itemCategories;
+  const labourCats = data.settings.labourCategories;
+
   const canAddItem =
     shopName.trim() &&
     itemName.trim() &&
     !isNaN(parseFloat(itemPrice)) &&
-    parseFloat(itemPrice) >= 0;
+    parseFloat(itemPrice) >= 0 &&
+    (itemCats.length === 0 || !!itemCategoryId);
 
   const addLabour = (e: React.FormEvent) => {
     e.preventDefault();
     const description = labourDesc.trim();
     const amount = parseFloat(labourAmount);
     if (!description || isNaN(amount) || amount < 0) return;
+    if (labourCats.length > 0 && !labourCategoryId) return;
     setData((d) => ({
       ...d,
       labour: [
-        { id: createId(), description, amount, addedAt: now() },
+        {
+          id: createId(),
+          description,
+          amount,
+          addedAt: now(),
+          categoryId: labourCategoryId,
+        },
         ...d.labour,
       ],
     }));
     setLabourDesc("");
     setLabourAmount("");
+    setLabourCategoryId("");
     setActiveTab("labour");
   };
 
@@ -278,6 +340,7 @@ export default function App() {
     return (
       <EditScreen
         bill={bill}
+        itemCategories={data.settings.itemCategories}
         onBack={goHome}
         onSave={(updated) => {
           setData((d) => ({
@@ -305,6 +368,7 @@ export default function App() {
     return (
       <EditLabourScreen
         entry={entry}
+        labourCategories={data.settings.labourCategories}
         onBack={goHome}
         onSave={(updated) => {
           setData((d) => ({
@@ -323,6 +387,14 @@ export default function App() {
 
   return (
     <div className="app">
+      <SettingsFab onClick={() => setSettingsOpen(true)} />
+      {settingsOpen && (
+        <SettingsModal
+          settings={data.settings}
+          onClose={() => setSettingsOpen(false)}
+          onChange={updateSettings}
+        />
+      )}
       <header className="header">
         <div className="header-row">
           <div>
@@ -383,6 +455,20 @@ export default function App() {
               )}
             </div>
 
+            <CategorySelect
+              id="itemCategory"
+              label="Category"
+              value={itemCategoryId}
+              categories={itemCats}
+              onChange={setItemCategoryId}
+              required={itemCats.length > 0}
+              hint={
+                itemCats.length === 0
+                  ? "Open Settings (gear icon) to add item categories."
+                  : undefined
+              }
+            />
+
             <div className="item-entry-block">
               <label>Add item</label>
               <div className="add-item-fields item-entry-row">
@@ -417,6 +503,7 @@ export default function App() {
                 <table className="billing-table">
                   <thead>
                     <tr>
+                      <th>Category</th>
                       <th>Item</th>
                       <th>Price</th>
                       <th></th>
@@ -425,6 +512,12 @@ export default function App() {
                   <tbody>
                     {draftItems.map((row) => (
                       <tr key={row.id}>
+                        <td>
+                          {getCategoryName(
+                            row.categoryId,
+                            data.settings.itemCategories
+                          )}
+                        </td>
                         <td>{row.itemName}</td>
                         <td className="price-cell">
                           {formatCurrency(row.price)}
@@ -471,6 +564,19 @@ export default function App() {
           </div>
           <div className="card-body">
             <form className="form-grid" onSubmit={addLabour}>
+              <CategorySelect
+                id="labourCategory"
+                label="Category"
+                value={labourCategoryId}
+                categories={labourCats}
+                onChange={setLabourCategoryId}
+                required={labourCats.length > 0}
+                hint={
+                  labourCats.length === 0
+                    ? "Open Settings (gear icon) to add labour categories."
+                    : undefined
+                }
+              />
               <div>
                 <label htmlFor="labourDesc">Description</label>
                 <input
@@ -544,6 +650,11 @@ export default function App() {
             </div>
           </div>
           <div className="card-body bills-body">
+            <CategoryTotalsBlock
+              title="By category"
+              rows={itemCategoryTotals}
+              fullTotal={itemsTotal}
+            />
             {data.itemBills.length === 0 ? (
               <div className="empty-state">
                 <span>📋</span>
@@ -555,6 +666,7 @@ export default function App() {
                   <SavedBillCard
                     key={bill.id}
                     bill={bill}
+                    itemCategories={data.settings.itemCategories}
                     onEdit={() => openEdit(bill.id)}
                     onDelete={() => removeBill(bill.id)}
                   />
@@ -588,6 +700,11 @@ export default function App() {
             </div>
           </div>
           <div className="card-body">
+            <CategoryTotalsBlock
+              title="By category"
+              rows={labourCategoryTotals}
+              fullTotal={labourTotal}
+            />
             {data.labour.length === 0 ? (
               <div className="empty-state">
                 <span>👷</span>
@@ -598,6 +715,12 @@ export default function App() {
                 {data.labour.map((entry) => (
                   <li key={entry.id} className="item-card labour">
                     <div className="item-info">
+                      <span className="item-category-tag">
+                        {getCategoryName(
+                          entry.categoryId,
+                          data.settings.labourCategories
+                        )}
+                      </span>
                       <h3>{entry.description}</h3>
                       <span className="time">
                         🕐 {formatDateTime(entry.addedAt)}
@@ -657,15 +780,18 @@ function ScreenHeader({
 
 function EditLabourScreen({
   entry,
+  labourCategories,
   onBack,
   onSave,
   onDelete,
 }: {
   entry: LabourEntry;
+  labourCategories: AppData["settings"]["labourCategories"];
   onBack: () => void;
   onSave: (entry: LabourEntry) => void;
   onDelete: () => void;
 }) {
+  const [categoryId, setCategoryId] = useState(entry.categoryId);
   const [description, setDescription] = useState(entry.description);
   const [amount, setAmount] = useState(String(entry.amount));
 
@@ -673,7 +799,13 @@ function EditLabourScreen({
     const desc = description.trim();
     const parsed = parseFloat(amount);
     if (!desc || isNaN(parsed) || parsed < 0) return;
-    onSave({ ...entry, description: desc, amount: parsed });
+    if (labourCategories.length > 0 && !categoryId) return;
+    onSave({
+      ...entry,
+      categoryId,
+      description: desc,
+      amount: parsed,
+    });
   };
 
   return (
@@ -688,6 +820,14 @@ function EditLabourScreen({
           <p className="hint labour-time-hint">
             Added: {formatDateTime(entry.addedAt)}
           </p>
+          <CategorySelect
+            id="editLabourCategory"
+            label="Category"
+            value={categoryId}
+            categories={labourCategories}
+            onChange={setCategoryId}
+            required={labourCategories.length > 0}
+          />
           <div>
             <label htmlFor="editLabourDesc">Description</label>
             <input
@@ -720,7 +860,8 @@ function EditLabourScreen({
               disabled={
                 !description.trim() ||
                 isNaN(parseFloat(amount)) ||
-                parseFloat(amount) < 0
+                parseFloat(amount) < 0 ||
+                (labourCategories.length > 0 && !categoryId)
               }
             >
               Save changes
@@ -737,11 +878,13 @@ function EditLabourScreen({
 
 function EditScreen({
   bill,
+  itemCategories,
   onBack,
   onSave,
   onDelete,
 }: {
   bill: ItemBill;
+  itemCategories: AppData["settings"]["itemCategories"];
   onBack: () => void;
   onSave: (bill: ItemBill) => void;
   onDelete: () => void;
@@ -750,9 +893,11 @@ function EditScreen({
   const [items, setItems] = useState<BillItem[]>(bill.items);
   const [itemName, setItemName] = useState("");
   const [itemPrice, setItemPrice] = useState("");
+  const [itemCategoryId, setItemCategoryId] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editPrice, setEditPrice] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState("");
 
   const total = items.reduce((s, i) => s + i.price, 0);
 
@@ -760,7 +905,16 @@ function EditScreen({
     const name = itemName.trim();
     const price = parseFloat(itemPrice);
     if (!name || isNaN(price) || price < 0) return;
-    setItems((list) => [...list, { id: createId(), itemName: name, price }]);
+    if (itemCategories.length > 0 && !itemCategoryId) return;
+    setItems((list) => [
+      ...list,
+      {
+        id: createId(),
+        itemName: name,
+        price,
+        categoryId: itemCategoryId,
+      },
+    ]);
     setItemName("");
     setItemPrice("");
   };
@@ -769,6 +923,7 @@ function EditScreen({
     setEditingId(item.id);
     setEditName(item.itemName);
     setEditPrice(String(item.price));
+    setEditCategoryId(item.categoryId);
   };
 
   const saveEdit = () => {
@@ -776,9 +931,12 @@ function EditScreen({
     const name = editName.trim();
     const price = parseFloat(editPrice);
     if (!name || isNaN(price) || price < 0) return;
+    if (itemCategories.length > 0 && !editCategoryId) return;
     setItems((list) =>
       list.map((i) =>
-        i.id === editingId ? { ...i, itemName: name, price } : i
+        i.id === editingId
+          ? { ...i, itemName: name, price, categoryId: editCategoryId }
+          : i
       )
     );
     setEditingId(null);
@@ -818,6 +976,7 @@ function EditScreen({
             <table className="billing-table">
               <thead>
                 <tr>
+                  <th>Category</th>
                   <th>Item</th>
                   <th>Price</th>
                   <th></th>
@@ -827,8 +986,16 @@ function EditScreen({
                 {items.map((item) =>
                   editingId === item.id ? (
                     <tr key={item.id} className="editing-row">
-                      <td colSpan={3}>
+                      <td colSpan={4}>
                         <div className="edit-inline-form">
+                          <CategorySelect
+                            id={`edit-cat-${item.id}`}
+                            label="Category"
+                            value={editCategoryId}
+                            categories={itemCategories}
+                            onChange={setEditCategoryId}
+                            required={itemCategories.length > 0}
+                          />
                           <input
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
@@ -863,6 +1030,9 @@ function EditScreen({
                     </tr>
                   ) : (
                     <tr key={item.id}>
+                      <td>
+                        {getCategoryName(item.categoryId, itemCategories)}
+                      </td>
                       <td>{item.itemName}</td>
                       <td className="price-cell">{formatCurrency(item.price)}</td>
                       <td className="actions-cell">
@@ -887,15 +1057,23 @@ function EditScreen({
                   )
                 )}
                 <tr className="total-row">
-                  <td>Total</td>
+                  <td colSpan={3}>Total</td>
                   <td className="price-cell">
                     <strong>{formatCurrency(total)}</strong>
                   </td>
-                  <td></td>
                 </tr>
               </tbody>
             </table>
           </div>
+
+          <CategorySelect
+            id="editNewItemCategory"
+            label="Category"
+            value={itemCategoryId}
+            categories={itemCategories}
+            onChange={setItemCategoryId}
+            required={itemCategories.length > 0}
+          />
 
           <div className="item-entry-block">
             <label>Add item</label>
@@ -940,10 +1118,12 @@ function EditScreen({
 
 function SavedBillCard({
   bill,
+  itemCategories,
   onEdit,
   onDelete,
 }: {
   bill: ItemBill;
+  itemCategories: AppData["settings"]["itemCategories"];
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -960,6 +1140,7 @@ function SavedBillCard({
         <table className="billing-table">
           <thead>
             <tr>
+              <th>Category</th>
               <th>Item</th>
               <th>Price</th>
             </tr>
@@ -967,12 +1148,13 @@ function SavedBillCard({
           <tbody>
             {bill.items.map((item) => (
               <tr key={item.id}>
+                <td>{getCategoryName(item.categoryId, itemCategories)}</td>
                 <td>{item.itemName}</td>
                 <td className="price-cell">{formatCurrency(item.price)}</td>
               </tr>
             ))}
             <tr className="total-row">
-              <td>Total</td>
+              <td colSpan={2}>Total</td>
               <td className="price-cell">
                 <strong>{formatCurrency(total)}</strong>
               </td>
