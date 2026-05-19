@@ -210,7 +210,6 @@ export default function App() {
   const dashboardTotals = useMemo(() => computeDashboardTotals(data), [data]);
   const draftTotal = draftItems.reduce((s, i) => s + i.price, 0);
   const shopLocked = draftItems.length > 0;
-  const categoryLocked = draftItems.length > 0;
   const hasAnyData =
     data.itemBills.length > 0 || data.labour.length > 0;
   const itemCategoryTotals = useMemo(
@@ -292,6 +291,14 @@ export default function App() {
         i.id === draftEditId ? { ...i, categoryId: draftEditCategoryId } : i
       )
     );
+    setDraftEditId(null);
+    setDraftEditCategoryId("");
+  };
+
+  const handleMainCategoryChange = (categoryId: string) => {
+    setItemCategoryId(categoryId);
+    if (itemCats.length > 0 && !categoryId) return;
+    setDraftItems((list) => list.map((i) => ({ ...i, categoryId })));
     setDraftEditId(null);
     setDraftEditCategoryId("");
   };
@@ -492,15 +499,14 @@ export default function App() {
               label="Main category"
               value={itemCategoryId}
               categories={itemCats}
-              onChange={setItemCategoryId}
-              required={itemCats.length > 0 && !categoryLocked}
-              disabled={categoryLocked}
+              onChange={handleMainCategoryChange}
+              required={itemCats.length > 0}
               hint={
                 itemCats.length === 0
                   ? "Open Settings (gear icon) to add item categories."
-                  : categoryLocked
-                    ? "Main category applies to all new items. Tap Edit on a row to change one item only."
-                    : "Pick once — every item you add will use this category."
+                  : draftItems.length > 0
+                    ? "Changing main category updates all items in this bill. Tap Edit on a row for one item only."
+                    : "All items you add will use this category."
               }
             />
 
@@ -991,8 +997,14 @@ function EditScreen({
       parseFloat(editPrice) >= 0);
   const allItemsCategorized =
     !needsCategory || items.every((i) => !!i.categoryId);
-  const categoryLocked =
-    items.length > 0 && (!needsCategory || !!itemCategoryId);
+
+  const handleMainCategoryChange = (categoryId: string) => {
+    setItemCategoryId(categoryId);
+    if (needsCategory && !categoryId) return;
+    setItems((list) => list.map((i) => ({ ...i, categoryId })));
+    setEditingId(null);
+    setEditError("");
+  };
 
   const addItem = () => {
     const name = itemName.trim();
@@ -1180,15 +1192,14 @@ function EditScreen({
             label="Main category"
             value={itemCategoryId}
             categories={itemCategories}
-            onChange={setItemCategoryId}
-            required={itemCategories.length > 0 && !categoryLocked}
-            disabled={categoryLocked}
+            onChange={handleMainCategoryChange}
+            required={itemCategories.length > 0}
             hint={
               itemCategories.length === 0
                 ? undefined
-                : categoryLocked
-                  ? "Main category applies to new items. Tap Edit on a row to change one item only."
-                  : "Pick main category before adding items."
+                : items.length > 0
+                  ? "Changing main category updates every item in this bill. Tap Edit on a row for one item only."
+                  : "All items will use this category."
             }
           />
 
