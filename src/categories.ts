@@ -1,4 +1,4 @@
-import type { AppData, AppSettings, Category } from "./types";
+import type { AppData, AppSettings, BillItem, Category, ItemBill, LabourEntry } from "./types";
 import { createId } from "./ids";
 
 export const UNCATEGORIZED_ID = "";
@@ -70,6 +70,78 @@ function mapToRows(
   }
 
   return rows;
+}
+
+export function matchesCategory(
+  entryCategoryId: string,
+  filterCategoryId: string
+): boolean {
+  const normalized = entryCategoryId || UNCATEGORIZED_ID;
+  return normalized === filterCategoryId;
+}
+
+export function computeFilteredItemTotal(
+  data: AppData,
+  categoryId: string | null
+): number {
+  if (!categoryId) {
+    return data.itemBills.reduce(
+      (s, b) => s + b.items.reduce((t, i) => t + i.price, 0),
+      0
+    );
+  }
+  let total = 0;
+  for (const bill of data.itemBills) {
+    for (const item of bill.items) {
+      if (matchesCategory(item.categoryId, categoryId)) {
+        total += item.price;
+      }
+    }
+  }
+  return total;
+}
+
+export function computeFilteredLabourTotal(
+  data: AppData,
+  categoryId: string | null
+): number {
+  if (!categoryId) {
+    return data.labour.reduce((s, l) => s + l.amount, 0);
+  }
+  return data.labour
+    .filter((entry) => matchesCategory(entry.categoryId, categoryId))
+    .reduce((s, l) => s + l.amount, 0);
+}
+
+export function filterBillItems(
+  items: BillItem[],
+  categoryId: string | null
+): BillItem[] {
+  if (!categoryId) return items;
+  return items.filter((item) => matchesCategory(item.categoryId, categoryId));
+}
+
+export function getFilteredItemBills(
+  data: AppData,
+  categoryId: string | null
+): ItemBill[] {
+  if (!categoryId) return data.itemBills;
+  return data.itemBills
+    .map((bill) => ({
+      ...bill,
+      items: filterBillItems(bill.items, categoryId),
+    }))
+    .filter((bill) => bill.items.length > 0);
+}
+
+export function getFilteredLabour(
+  data: AppData,
+  categoryId: string | null
+): LabourEntry[] {
+  if (!categoryId) return data.labour;
+  return data.labour.filter((entry) =>
+    matchesCategory(entry.categoryId, categoryId)
+  );
 }
 
 export function createCategory(name: string): Category {

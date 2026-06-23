@@ -5,6 +5,10 @@ import {
   computeItemCategoryTotals,
   computeLabourCategoryTotals,
   getCategoryName,
+  getFilteredItemBills,
+  getFilteredLabour,
+  computeFilteredItemTotal,
+  computeFilteredLabourTotal,
 } from "./categories";
 import { billTotal } from "./storage";
 import { formatDateTime } from "./utils";
@@ -110,24 +114,54 @@ export function downloadDashboardPdf(data: AppData, totals: DashboardTotals) {
   doc.save(`shop-expense-full-report-${dateStamp()}.pdf`);
 }
 
-/** Items billing only PDF. */
-export function downloadItemsPdf(data: AppData, itemsTotal: number) {
+/** Items billing only PDF. Optional categoryId filters to one category. */
+export function downloadItemsPdf(
+  data: AppData,
+  itemsTotal: number,
+  categoryId?: string | null
+) {
+  const categories = data.settings.itemCategories;
+  const categoryName = categoryId
+    ? getCategoryName(categoryId, categories)
+    : null;
+  const filteredData: AppData = categoryId
+    ? { ...data, itemBills: getFilteredItemBills(data, categoryId) }
+    : data;
+  const filteredTotal = categoryId
+    ? computeFilteredItemTotal(data, categoryId)
+    : itemsTotal;
+  const billCount = filteredData.itemBills.length;
+  const lineCount = filteredData.itemBills.reduce(
+    (s, b) => s + b.items.length,
+    0
+  );
+
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const margin = 14;
-  const billCount = data.itemBills.length;
-  const lineCount = data.itemBills.reduce((s, b) => s + b.items.length, 0);
+  const reportTitle = categoryName
+    ? `Items Billing — ${categoryName}`
+    : "Items Billing Report";
 
-  let y = writeReportHeader(doc, margin, "Items Billing Report");
+  let y = writeReportHeader(doc, margin, reportTitle);
+
+  const summaryBody: string[][] = categoryName
+    ? [
+        ["Category", categoryName],
+        ["Category total", rs(filteredTotal)],
+        ["Shop bills", String(billCount)],
+        ["Item lines", String(lineCount)],
+      ]
+    : [
+        ["Items total", rs(filteredTotal)],
+        ["Shop bills", String(billCount)],
+        ["Item lines", String(lineCount)],
+      ];
 
   autoTable(doc, {
     startY: y + 4,
     margin: { left: margin, right: margin },
     head: [["Summary", "Value"]],
-    body: [
-      ["Items total", rs(itemsTotal)],
-      ["Shop bills", String(billCount)],
-      ["Item lines", String(lineCount)],
-    ],
+    body: summaryBody,
     theme: "grid",
     headStyles: { fillColor: [15, 118, 110], fontSize: 10 },
     styles: { fontSize: 10, cellPadding: 2.5 },
@@ -135,19 +169,28 @@ export function downloadItemsPdf(data: AppData, itemsTotal: number) {
   });
 
   y = getLastTableY(doc) + 12;
-  y = writeCategoryTotalsSection(
-    doc,
-    margin,
-    y,
-    "Category totals",
-    computeItemCategoryTotals(data),
-    itemsTotal,
-    [15, 118, 110]
-  );
-  y += 8;
-  writeItemsSection(doc, margin, y, data);
+  if (!categoryId) {
+    y = writeCategoryTotalsSection(
+      doc,
+      margin,
+      y,
+      "Category totals",
+      computeItemCategoryTotals(data),
+      itemsTotal,
+      [15, 118, 110]
+    );
+    y += 8;
+  }
+  writeItemsSection(doc, margin, y, filteredData);
   addPageNumbers(doc);
-  doc.save(`items-billing-${dateStamp()}.pdf`);
+  const slug = categoryName
+    ? categoryName.toLowerCase().replace(/\s+/g, "-").replace(/[^\w-]/g, "")
+    : "";
+  doc.save(
+    categoryName
+      ? `items-billing-${slug}-${dateStamp()}.pdf`
+      : `items-billing-${dateStamp()}.pdf`
+  );
 }
 
 /** Category-wise totals only (items + labour + grand). */
@@ -215,21 +258,48 @@ export function downloadCategoryTotalsPdf(
   doc.save(`category-totals-${dateStamp()}.pdf`);
 }
 
-/** Labour billing only PDF. */
-export function downloadLabourPdf(data: AppData, labourTotal: number) {
+/** Labour billing only PDF. Optional categoryId filters to one category. */
+export function downloadLabourPdf(
+  data: AppData,
+  labourTotal: number,
+  categoryId?: string | null
+) {
+  const categories = data.settings.labourCategories;
+  const categoryName = categoryId
+    ? getCategoryName(categoryId, categories)
+    : null;
+  const filteredLabour = categoryId
+    ? getFilteredLabour(data, categoryId)
+    : data.labour;
+  const filteredTotal = categoryId
+    ? computeFilteredLabourTotal(data, categoryId)
+    : labourTotal;
+  const filteredData: AppData = { ...data, labour: filteredLabour };
+
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const margin = 14;
+  const reportTitle = categoryName
+    ? `Labour Billing — ${categoryName}`
+    : "Labour Billing Report";
 
-  let y = writeReportHeader(doc, margin, "Labour Billing Report");
+  let y = writeReportHeader(doc, margin, reportTitle);
+
+  const summaryBody: string[][] = categoryName
+    ? [
+        ["Category", categoryName],
+        ["Category total", rs(filteredTotal)],
+        ["Entries", String(filteredLabour.length)],
+      ]
+    : [
+        ["Labour total", rs(filteredTotal)],
+        ["Entries", String(filteredLabour.length)],
+      ];
 
   autoTable(doc, {
     startY: y + 4,
     margin: { left: margin, right: margin },
     head: [["Summary", "Value"]],
-    body: [
-      ["Labour total", rs(labourTotal)],
-      ["Entries", String(data.labour.length)],
-    ],
+    body: summaryBody,
     theme: "grid",
     headStyles: { fillColor: [124, 58, 237], fontSize: 10 },
     styles: { fontSize: 10, cellPadding: 2.5 },
@@ -237,19 +307,28 @@ export function downloadLabourPdf(data: AppData, labourTotal: number) {
   });
 
   y = getLastTableY(doc) + 12;
-  y = writeCategoryTotalsSection(
-    doc,
-    margin,
-    y,
-    "Category totals",
-    computeLabourCategoryTotals(data),
-    labourTotal,
-    [124, 58, 237]
-  );
-  y += 8;
-  writeLabourSection(doc, margin, y, data);
+  if (!categoryId) {
+    y = writeCategoryTotalsSection(
+      doc,
+      margin,
+      y,
+      "Category totals",
+      computeLabourCategoryTotals(data),
+      labourTotal,
+      [124, 58, 237]
+    );
+    y += 8;
+  }
+  writeLabourSection(doc, margin, y, filteredData);
   addPageNumbers(doc);
-  doc.save(`labour-billing-${dateStamp()}.pdf`);
+  const slug = categoryName
+    ? categoryName.toLowerCase().replace(/\s+/g, "-").replace(/[^\w-]/g, "")
+    : "";
+  doc.save(
+    categoryName
+      ? `labour-billing-${slug}-${dateStamp()}.pdf`
+      : `labour-billing-${dateStamp()}.pdf`
+  );
 }
 
 function writeCategoryTotalsSection(

@@ -9,7 +9,11 @@ import {
 import {
   computeItemCategoryTotals,
   computeLabourCategoryTotals,
+  computeFilteredItemTotal,
+  computeFilteredLabourTotal,
   getCategoryName,
+  getFilteredItemBills,
+  getFilteredLabour,
   mergeSettings,
 } from "./categories";
 import { CategorySelect } from "./CategorySelect";
@@ -63,6 +67,12 @@ export default function App() {
   const [labourAmount, setLabourAmount] = useState("");
   const [labourCategoryId, setLabourCategoryId] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [itemCategoryFilter, setItemCategoryFilter] = useState<string | null>(
+    null
+  );
+  const [labourCategoryFilter, setLabourCategoryFilter] = useState<
+    string | null
+  >(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("local");
   const [syncError, setSyncError] = useState("");
   const [cloudReady, setCloudReady] = useState(false);
@@ -220,6 +230,28 @@ export default function App() {
     () => computeLabourCategoryTotals(data),
     [data]
   );
+  const filteredItemsTotal = useMemo(
+    () => computeFilteredItemTotal(data, itemCategoryFilter),
+    [data, itemCategoryFilter]
+  );
+  const filteredLabourTotal = useMemo(
+    () => computeFilteredLabourTotal(data, labourCategoryFilter),
+    [data, labourCategoryFilter]
+  );
+  const filteredItemBills = useMemo(
+    () => getFilteredItemBills(data, itemCategoryFilter),
+    [data, itemCategoryFilter]
+  );
+  const filteredLabour = useMemo(
+    () => getFilteredLabour(data, labourCategoryFilter),
+    [data, labourCategoryFilter]
+  );
+  const itemFilterName = itemCategoryFilter
+    ? getCategoryName(itemCategoryFilter, data.settings.itemCategories)
+    : null;
+  const labourFilterName = labourCategoryFilter
+    ? getCategoryName(labourCategoryFilter, data.settings.labourCategories)
+    : null;
 
   const updateSettings = (settings: AppData["settings"]) => {
     setData((d) => ({ ...d, settings }));
@@ -726,12 +758,30 @@ export default function App() {
           <div className="card-header">
             <h2>Saved Items Billing</h2>
             <div className="card-header-end">
-              <span className="badge">{formatCurrency(itemsTotal)}</span>
+              <span className="badge">
+                {formatCurrency(
+                  itemCategoryFilter ? filteredItemsTotal : itemsTotal
+                )}
+              </span>
               <PdfDownloadButton
                 variant="items"
-                label="Download items billing PDF"
-                disabled={data.itemBills.length === 0}
-                onClick={() => downloadItemsPdf(data, itemsTotal)}
+                label={
+                  itemFilterName
+                    ? `Download ${itemFilterName} items PDF`
+                    : "Download items billing PDF"
+                }
+                disabled={
+                  itemCategoryFilter
+                    ? filteredItemsTotal <= 0
+                    : data.itemBills.length === 0
+                }
+                onClick={() =>
+                  downloadItemsPdf(
+                    data,
+                    itemsTotal,
+                    itemCategoryFilter
+                  )
+                }
               />
             </div>
           </div>
@@ -740,15 +790,22 @@ export default function App() {
               title="By category"
               rows={itemCategoryTotals}
               fullTotal={itemsTotal}
+              selectedCategoryId={itemCategoryFilter}
+              onSelectCategory={setItemCategoryFilter}
             />
             {data.itemBills.length === 0 ? (
               <div className="empty-state">
                 <span>📋</span>
                 No saved bills yet. Add items above and press Save.
               </div>
+            ) : filteredItemBills.length === 0 ? (
+              <div className="empty-state">
+                <span>📋</span>
+                No items in {itemFilterName ?? "this category"}.
+              </div>
             ) : (
               <ul className="bill-list">
-                {data.itemBills.map((bill) => (
+                {filteredItemBills.map((bill) => (
                   <SavedBillCard
                     key={bill.id}
                     bill={bill}
@@ -775,13 +832,29 @@ export default function App() {
                   color: "var(--labour)",
                 }}
               >
-                {formatCurrency(labourTotal)}
+                {formatCurrency(
+                  labourCategoryFilter ? filteredLabourTotal : labourTotal
+                )}
               </span>
               <PdfDownloadButton
                 variant="labour"
-                label="Download labour billing PDF"
-                disabled={data.labour.length === 0}
-                onClick={() => downloadLabourPdf(data, labourTotal)}
+                label={
+                  labourFilterName
+                    ? `Download ${labourFilterName} labour PDF`
+                    : "Download labour billing PDF"
+                }
+                disabled={
+                  labourCategoryFilter
+                    ? filteredLabourTotal <= 0
+                    : data.labour.length === 0
+                }
+                onClick={() =>
+                  downloadLabourPdf(
+                    data,
+                    labourTotal,
+                    labourCategoryFilter
+                  )
+                }
               />
             </div>
           </div>
@@ -790,15 +863,22 @@ export default function App() {
               title="By category"
               rows={labourCategoryTotals}
               fullTotal={labourTotal}
+              selectedCategoryId={labourCategoryFilter}
+              onSelectCategory={setLabourCategoryFilter}
             />
             {data.labour.length === 0 ? (
               <div className="empty-state">
                 <span>👷</span>
                 No labour entries yet. Add labour above.
               </div>
+            ) : filteredLabour.length === 0 ? (
+              <div className="empty-state">
+                <span>👷</span>
+                No labour in {labourFilterName ?? "this category"}.
+              </div>
             ) : (
               <ul className="item-list">
-                {data.labour.map((entry) => (
+                {filteredLabour.map((entry) => (
                   <li key={entry.id} className="item-card labour">
                     <div className="item-info">
                       <span className="item-category-tag">
@@ -1274,7 +1354,7 @@ function SavedBillCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const total = billTotal(bill);
+  const total = bill.items.reduce((s, i) => s + i.price, 0);
 
   return (
     <li className="bill-card saved-bill">

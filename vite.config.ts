@@ -1,8 +1,10 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
 
 // Base path must match GitHub repo name for Pages
+// Use esbuild for JSX (avoids Babel read timeouts on synced/iCloud folders)
 export default defineConfig({
-  plugins: [react()],
+  esbuild: {
+    jsx: "automatic",
+  },
   base: "/shop-expense-tracker-/",
 });
